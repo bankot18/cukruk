@@ -1,18 +1,23 @@
 # ==========================================================
-# CLOUDFLARE PAGES / WORKERS CONFIGURATION - CEKAT
-# File: CP WEB/wrangler.toml
+# CLOUDFLARE WORKER & STATIC ASSETS CONFIGURATION
+# File: wrangler.toml (Root Repository)
 # ==========================================================
-name = "cekat-control-panel"
-pages_build_output_dir = "."
+name = "cpenco"
+main = "worker.js"
 compatibility_date = "2024-09-01"
 
-# 1. Cloudflare D1 SQL Database Binding
+# 1. Folder Static Assets Web Control Panel (index.html, style.css, app.js)
+[assets]
+directory = "./CP WEB"
+binding = "ASSETS"
+
+# 2. Binding Database Cloudflare D1 SQL
 [[d1_databases]]
 binding = "DB"
-database_name = "cekat_db"
-database_id = "YOUR_D1_DATABASE_ID_HERE"
+database_name = "enco_db"
+database_id = "8815a9d2-4d81-4340-8415-8992229f3c07"
 
-# 2. Cloudflare R2 Object Storage Binding (Arsip CSV & Laporan)
+# 3. Binding Object Storage Cloudflare R2
 [[r2_buckets]]
 binding = "BUCKET"
-bucket_name = "cekat-storage"
+bucket_name = "enco-storage"
