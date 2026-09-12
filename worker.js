@@ -1,14 +1,14 @@
 /**
  * ==========================================================================
  * CLOUDFLARE WORKER ROUTER & STATIC ASSETS HANDLER - CEKAT / PRAKTIS
- * File: CP WEB/worker.js
+ * File: worker.js (Root Repository)
  * ==========================================================================
  */
 
-import * as authHandler from "./functions/api/auth.js";
-import * as usersHandler from "./functions/api/users.js";
-import * as recordsHandler from "./functions/api/records.js";
-import * as storageHandler from "./functions/api/storage.js";
+import * as authHandler from "./cp-web/functions/api/auth.js";
+import * as usersHandler from "./cp-web/functions/api/users.js";
+import * as recordsHandler from "./cp-web/functions/api/records.js";
+import * as storageHandler from "./cp-web/functions/api/storage.js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -44,7 +44,7 @@ export default {
       if (request.method === "POST") return storageHandler.onRequestPost({ request, env });
     }
 
-    // 5. STATIC ASSETS (Menyajikan index.html, style.css, app.js di folder CP WEB)
+    // 5. STATIC ASSETS (Menyajikan index.html, style.css, app.js dari folder cp-web)
     if (env && env.ASSETS) {
       return env.ASSETS.fetch(request);
     }

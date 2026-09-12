@@ -8,7 +8,7 @@ compatibility_date = "2024-09-01"
 
 # 1. Folder Static Assets Web Control Panel (index.html, style.css, app.js)
 [assets]
-directory = "./CP WEB"
+directory = "./cp-web"
 binding = "ASSETS"
 
 # 2. Binding Database Cloudflare D1 SQL
