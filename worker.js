@@ -5,10 +5,10 @@
  * ==========================================================================
  */
 
-import * as authHandler from "./cp-web/functions/api/auth.js";
-import * as usersHandler from "./cp-web/functions/api/users.js";
-import * as recordsHandler from "./cp-web/functions/api/records.js";
-import * as storageHandler from "./cp-web/functions/api/storage.js";
+import * as authHandler from "./functions/api/auth.js";
+import * as usersHandler from "./functions/api/users.js";
+import * as recordsHandler from "./functions/api/records.js";
+import * as storageHandler from "./functions/api/storage.js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -44,7 +44,7 @@ export default {
       if (request.method === "POST") return storageHandler.onRequestPost({ request, env });
     }
 
-    // 5. STATIC ASSETS (Menyajikan index.html, style.css, app.js dari folder cp-web)
+    // 5. STATIC ASSETS (index.html, style.css, app.js dari folder public/)
     if (env && env.ASSETS) {
       return env.ASSETS.fetch(request);
     }

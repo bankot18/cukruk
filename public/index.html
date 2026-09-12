@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control Panel & Real-Time Analytics - CEKAT / PRAKTIS</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- SheetJS (XLSX) untuk Konversi CSV-to-XLSX On-The-Fly di Browser -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- SweetAlert2 untuk Dialog Modern -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ==========================================================================
+       SCREEN 1: NEON AUTH / LOGIN
+       ========================================================================== -->
+  <div id="auth-screen" class="auth-wrapper">
+    <div class="neon-auth-card">
+      <div class="auth-header">
+        <h1 class="auth-logo-text">CEKAT</h1>
+        <p class="auth-subtitle">CONTROL PANEL & ANALYTICS</p>
+        <p class="auth-tagline">Cloudflare Native Edge Engine (Pages + D1 + R2)</p>
+      </div>
+
+      <form id="loginForm" class="auth-form" onsubmit="handleLoginSubmit(event)">
+        <div class="input-field">
+          <label for="inputUsername">Username / ID Petugas</label>
+          <div class="input-box">
+            <i class="fa-solid fa-user-shield"></i>
+            <input type="text" id="inputUsername" placeholder="Masukkan username" required autocomplete="username" value="admin">
+          </div>
+        </div>
+
+        <div class="input-field">
+          <label for="inputPassword">Kata Sandi</label>
+          <div class="input-box">
+            <i class="fa-solid fa-lock"></i>
+            <input type="password" id="inputPassword" placeholder="Masukkan password" required autocomplete="current-password" value="admin123">
+          </div>
+        </div>
+
+        <button type="submit" class="btn-auth-submit" id="btnLoginSubmit">
+          <span>MASUK PANEL</span>
+          <i class="fa-solid fa-arrow-right-to-bracket"></i>
+        </button>
+      </form>
+
+      <div class="auth-quick-preset">
+        <div class="quick-preset-title">Quick Demo Credentials:</div>
+        <div class="preset-buttons">
+          <button type="button" class="btn-preset" onclick="fillCredentials('admin', 'admin123')">
+            <i class="fa-solid fa-crown" style="color: #fbbf24;"></i> Admin (Lifetime)
+          </button>
+          <button type="button" class="btn-preset" onclick="fillCredentials('petugas1', 'petugas123')">
+            <i class="fa-solid fa-user-nurse" style="color: #38bdf8;"></i> Petugas Skrining
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       SCREEN 2: DASHBOARD UTAMA
+       ========================================================================== -->
+  <div id="dashboard-screen" class="app-container" style="display: none;">
+    
+    <!-- SIDEBAR -->
+    <aside class="app-sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-brand">
+          <div class="brand-icon">⚡</div>
+          <div>
+            <div class="brand-title">CEKAT</div>
+            <div class="brand-subtitle">Control Panel D1</div>
+          </div>
+        </div>
+
+        <div class="sidebar-nav-label">Menu Navigasi</div>
+        <nav class="sidebar-nav">
+          <button class="nav-link active" id="navSekolah" onclick="switchCategory('SEKOLAH')">
+            <i class="fa-solid fa-school"></i>
+            <span>Data Siswa (Sekolah)</span>
+            <span class="nav-badge" id="badgeCountSekolah">0</span>
+          </button>
+          <button class="nav-link" id="navUmum" onclick="switchCategory('UMUM')">
+            <i class="fa-solid fa-users"></i>
+            <span>Data Warga (Umum)</span>
+            <span class="nav-badge" id="badgeCountUmum">0</span>
+          </button>
+          
+          <!-- Menu Khusus Admin -->
+          <div id="adminMenuSection" style="margin-top: 16px;">
+            <div class="sidebar-nav-label">Administrator</div>
+            <button class="nav-link" id="navUsers" onclick="openUserModal()">
+              <i class="fa-solid fa-user-gear"></i>
+              <span>Kelola Petugas</span>
+            </button>
+            <button class="nav-link" id="navBackup" onclick="openBackupModal()">
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+              <span>Arsip Cloudflare R2</span>
+            </button>
+          </div>
+        </nav>
+      </div>
+
+      <!-- SIDEBAR FOOTER (USER INFO) -->
+      <div class="sidebar-footer">
+        <div class="user-profile-card">
+          <div class="user-info">
+            <div class="user-avatar" id="userAvatar">A</div>
+            <div class="user-meta">
+              <div class="user-name" id="userNameDisplay">Admin</div>
+              <div class="user-license" id="userLicenseDisplay">
+                <i class="fa-solid fa-circle-check"></i>
+                <span>Aktif Selamanya</span>
+              </div>
+            </div>
+          </div>
+          <button class="btn-logout" onclick="handleLogout()" title="Keluar dari Panel">
+            <i class="fa-solid fa-right-from-bracket"></i>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN VIEWPORT -->
+    <main class="main-viewport">
+      
+      <!-- TOPBAR -->
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <div class="page-title">
+            <span id="pageTitleIcon">🏫</span>
+            <span id="pageTitleText">Data Skrining Anak Sekolah</span>
+          </div>
+
+          <!-- Dual Tab Switcher -->
+          <div class="category-tab-switcher">
+            <button class="category-tab-btn active" id="tabBtnSekolah" onclick="switchCategory('SEKOLAH')">
+              <i class="fa-solid fa-graduation-cap"></i>
+              <span>SEKOLAH</span>
+            </button>
+            <button class="category-tab-btn" id="tabBtnUmum" onclick="switchCategory('UMUM')">
+              <i class="fa-solid fa-user-group"></i>
+              <span>UMUM</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Topbar Action Buttons -->
+        <div class="topbar-actions">
+          <!-- Tombol Export Excel Hijau (Konversi On-The-Fly via SheetJS) -->
+          <button class="btn-action btn-action--excel" onclick="exportToExcel()" title="Konversi CSV langsung ke format Excel .xlsx dengan NIK Tipe Teks">
+            <i class="fa-solid fa-file-excel"></i>
+            <span>Export Excel (.xlsx)</span>
+          </button>
+
+          <!-- Tombol Download CSV Mentah -->
+          <button class="btn-action btn-action--csv" onclick="exportToRawCsv()" title="Unduh CSV asli tanpa styling">
+            <i class="fa-solid fa-file-csv"></i>
+            <span>Download CSV</span>
+          </button>
+
+          <!-- Tombol Snapshot Backup ke R2 (Admin) -->
+          <button class="btn-action btn-action--backup" id="btnTriggerR2Backup" onclick="triggerR2Backup()" title="Simpan arsip CSV ke Cloudflare R2">
+            <i class="fa-solid fa-cloud"></i>
+            <span>Backup ke R2</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- DASHBOARD BODY -->
+      <div class="dashboard-body">
+        
+        <!-- KPI METRICS GRID -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Total Pasien Terdaftar</div>
+            <div class="kpi-value" id="kpiTotal">0</div>
+            <div class="kpi-desc">Akumulasi NIK unik di Cloudflare D1</div>
+          </div>
+
+          <div class="kpi-card kpi-card--emerald">
+            <div class="kpi-label">Selesai Pemeriksaan</div>
+            <div class="kpi-value" id="kpiSelesai" style="color: #34d399;">0</div>
+            <div class="kpi-desc">Data klinis lengkap & terisi penuh</div>
+          </div>
+
+          <div class="kpi-card kpi-card--amber">
+            <div class="kpi-label">Belum Diperiksa (Antrean)</div>
+            <div class="kpi-value" id="kpiPending" style="color: #fbbf24;">0</div>
+            <div class="kpi-desc">Hanya data identitas (Menunggu Menu Pasien)</div>
+          </div>
+
+          <div class="kpi-card kpi-card--purple">
+            <div class="kpi-label" id="kpiExtraLabel">Cakupan Skrining</div>
+            <div class="kpi-value" id="kpiExtraValue" style="color: #a78bfa;">0%</div>
+            <div class="kpi-desc" id="kpiExtraDesc">Persentase pasien selesai di-entry</div>
+          </div>
+        </div>
+
+        <!-- FILTER & SEARCH BAR -->
+        <div class="filter-bar">
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="searchInput" placeholder="Cari berdasarkan NIK, Nama, Sekolah, atau Kelas..." oninput="handleSearch(this.value)">
+          </div>
+
+          <div class="filter-select-group">
+            <select class="filter-select" id="filterStatus" onchange="handleFilterChange()">
+              <option value="">Semua Status Data</option>
+              <option value="SELESAI_PEMERIKSAAN">Selesai Pemeriksaan</option>
+              <option value="TERDAFTAR">Belum Diperiksa (Terdaftar Saja)</option>
+            </select>
+
+            <button class="btn-action btn-action--csv" onclick="loadDashboardData()" title="Muat Ulang Data">
+              <i class="fa-solid fa-arrows-rotate"></i>
+              <span>Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- DATA TABLE CARD -->
+        <div class="table-card">
+          <div class="table-responsive">
+            <table id="mainDataTable">
+              <thead id="tableHeaderRow">
+                <!-- Header dinamis diinjeksi via JavaScript -->
+              </thead>
+              <tbody id="tableBody">
+                <tr>
+                  <td colspan="15" class="table-state-box">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                    <div>Memuat data dari Cloudflare D1...</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: KELOLA PETUGAS & LISENSI (ADMIN ONLY)
+       ========================================================================== -->
+  <div class="modal-overlay" id="userModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-user-shield" style="color: var(--neon-cyan);"></i>
+          <span>Manajemen Petugas & Lisensi</span>
+        </div>
+        <button class="modal-close" onclick="closeUserModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Form Tambah User -->
+        <form id="addUserForm" onsubmit="handleAddUser(event)" style="display: flex; flex-direction: column; gap: 12px; background: rgba(0,0,0,0.3); padding: 16px; border-radius: 12px; border: 1px solid var(--border-glass);">
+          <div style="font-weight: 700; font-size: 0.85rem; color: var(--neon-cyan);">+ Tambah Akun Petugas Baru</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="input-box">
+              <input type="text" id="newUsername" placeholder="Username (misal: bidan_ani)" required>
+            </div>
+            <div class="input-box">
+              <input type="password" id="newPassword" placeholder="Password" required>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 10px;">
+            <div class="input-box">
+              <input type="text" id="newNama" placeholder="Nama Lengkap Petugas" required>
+            </div>
+            <div class="input-box">
+              <input type="date" id="newMasaAktif" title="Masa Aktif Lisensi" required value="2026-12-31">
+            </div>
+          </div>
+          <button type="submit" class="btn-action btn-action--backup" style="justify-content: center; height: 38px;">
+            <i class="fa-solid fa-plus"></i>
+            <span>Simpan Akun Petugas</span>
+          </button>
+        </form>
+
+        <!-- Tabel Daftar User -->
+        <div>
+          <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 10px;">Daftar Pengguna Terdaftar:</div>
+          <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-glass); border-radius: 10px;">
+            <table style="width: 100%; font-size: 0.78rem;">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Nama</th>
+                  <th>Role</th>
+                  <th>Masa Aktif</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="userTableBody">
+                <!-- Diisi via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: ARSIP BACKUP CLOUDFLARE R2
+       ========================================================================== -->
+  <div class="modal-overlay" id="backupModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-cloud-arrow-down" style="color: var(--neon-emerald);"></i>
+          <span>Arsip Snapshot Backup Cloudflare R2</span>
+        </div>
+        <button class="modal-close" onclick="closeBackupModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.82rem; color: var(--text-muted);">
+          Daftar file arsip <code>.csv</code> ringan yang tersimpan di bucket Cloudflare R2. Anda dapat mengunduh langsung atau mengonversinya ke Excel.
+        </p>
+
+        <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+          <button class="btn-action btn-action--backup" onclick="triggerR2Backup()" style="height: 38px;">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span>Buat Snapshot Baru Sekarang</span>
+          </button>
+        </div>
+
+        <div style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border-glass); border-radius: 10px;">
+          <table style="width: 100%; font-size: 0.78rem;">
+            <thead>
+              <tr>
+                <th>Nama File Backup (R2)</th>
+                <th>Ukuran</th>
+                <th>Waktu Dibuat</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="backupTableBody">
+              <!-- Diisi via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- App Controller Script -->
+  <script src="app.js"></script>
+</body>
+</html>

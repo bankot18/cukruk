@@ -1,23 +1,24 @@
 # ==========================================================
 # CLOUDFLARE WORKER & STATIC ASSETS CONFIGURATION
-# File: wrangler.toml (Root Repository)
+# Project: CEKAT Control Panel (cpenco)
+# Deploy: Repo ini langsung di-deploy ke Cloudflare Pages
 # ==========================================================
 name = "cpenco"
 main = "worker.js"
 compatibility_date = "2024-09-01"
 
-# 1. Folder Static Assets Web Control Panel (index.html, style.css, app.js)
+# Static Assets — folder "public" berisi index.html, style.css, app.js
 [assets]
-directory = "./cp-web"
+directory = "./public"
 binding = "ASSETS"
 
-# 2. Binding Database Cloudflare D1 SQL
+# Binding Database Cloudflare D1 SQL
 [[d1_databases]]
 binding = "DB"
 database_name = "enco_db"
 database_id = "8815a9d2-4d81-4340-8415-8992229f3c07"
 
-# 3. Binding Object Storage Cloudflare R2
+# Binding Object Storage Cloudflare R2
 [[r2_buckets]]
 binding = "BUCKET"
 bucket_name = "enco-storage"
