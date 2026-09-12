@@ -1,6 +1,6 @@
 /**
  * ==========================================================================
- * CLOUDFLARE WORKER ROUTER & STATIC ASSETS HANDLER - CEKAT / PRAKTIS
+ * CLOUDFLARE WORKER ROUTER & STATIC ASSETS HANDLER - ENCO (Entry CKG Otomatis)
  * File: worker.js (Root Repository)
  * ==========================================================================
  */

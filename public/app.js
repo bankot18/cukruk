@@ -1,6 +1,6 @@
 /**
  * ==========================================================================
- * CEKAT / PRAKTIS - WEB CONTROL PANEL APPLICATION CONTROLLER
+ * ENCO (Entry CKG Otomatis) - WEB CONTROL PANEL APPLICATION CONTROLLER
  * Architecture: Cloudflare Pages + D1 Database + R2 Object Storage
  * ==========================================================================
  */
@@ -21,7 +21,7 @@ document.addEventListener("DOMContentLoaded", () => {
 // ==========================================================================
 
 function checkExistingSession() {
-  const saved = localStorage.getItem("cekat_session");
+  const saved = localStorage.getItem("enco_session");
   if (saved) {
     try {
       const user = JSON.parse(saved);
@@ -68,7 +68,7 @@ async function handleLoginSubmit(event) {
     const data = await res.json();
 
     if (res.ok && data.status === "success") {
-      localStorage.setItem("cekat_session", JSON.stringify(data.user));
+      localStorage.setItem("enco_session", JSON.stringify(data.user));
       setupUserSession(data.user);
       showToast(data.message || "Selamat datang kembali!", "success");
     } else {
@@ -139,7 +139,7 @@ function handleLogout() {
     cancelButtonColor: "rgba(255,255,255,0.1)"
   }).then((result) => {
     if (result.isConfirmed) {
-      localStorage.removeItem("cekat_session");
+      localStorage.removeItem("enco_session");
       currentUser = null;
       showAuthScreen();
       showToast("Anda telah keluar dari sistem.", "info");
@@ -442,7 +442,7 @@ function exportToExcel() {
   showToast("Mengonversi data ke Excel .xlsx...", "info");
 
   const today = new Date().toISOString().split("T")[0];
-  const filename = `Laporan_CEKAT_${currentCategory}_${today}.xlsx`;
+  const filename = `Laporan_ENCO_${currentCategory}_${today}.xlsx`;
 
   // Petakan Kolom Berdasarkan Kategori
   let exportData = [];

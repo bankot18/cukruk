@@ -1,6 +1,6 @@
 # ==========================================================
 # CLOUDFLARE WORKER & STATIC ASSETS CONFIGURATION
-# Project: CEKAT Control Panel (cpenco)
+# Project: ENCO Control Panel (Entry CKG Otomatis)
 # Deploy: Repo ini langsung di-deploy ke Cloudflare Pages
 # ==========================================================
 name = "cpenco"
