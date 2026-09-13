@@ -1517,8 +1517,14 @@ async function loadBackupList() {
 }
 
 // ==========================================================================
-// 15. USER MANAGEMENT (ADMIN ONLY)
+// 15. USER & LICENSE MANAGEMENT (3 ROLES & 6 FIELDS)
 // ==========================================================================
+
+let cachedUsers = [];
+let searchUserKeyword = "";
+let filterUserRoleVal = "";
+let filterUserLisensiVal = "";
+let filterUserStatusVal = "";
 
 function openUserModal() {
   document.getElementById("userModal").classList.add("show");
@@ -1531,78 +1537,457 @@ function closeUserModal() {
 
 async function loadUserList() {
   const tbody = document.getElementById("userTableBody");
-  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 15px;">Memuat akun...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 25px; color: var(--text-secondary);"><i class="fa-solid fa-circle-notch fa-spin"></i> Memuat daftar akun...</td></tr>`;
 
   try {
     const res = await fetch("/api/users");
     const data = await res.json();
     if (res.ok && data.status === "success") {
-      const users = data.users || [];
-      tbody.innerHTML = users.map(u => {
-        const isAdmin = u.role === "admin";
-        const isAktif = u.status_aktif === "aktif";
-        const statusBadge = isAktif
-          ? `<span class="badge-status badge-status--selesai">Aktif</span>`
-          : `<span class="badge-status badge-risk--danger">Nonaktif</span>`;
-
-        return `
-          <tr>
-            <td style="font-weight: 700; color: #fff;">${u.username}</td>
-            <td>${u.nama}</td>
-            <td><span class="user-role-badge ${isAdmin ? 'admin' : ''}">${u.role.toUpperCase()}</span></td>
-            <td>${statusBadge}</td>
-            <td>
-              <div class="row-actions-group">
-                ${!isAdmin ? `
-                  <button class="btn-row-action" onclick="toggleUserStatus('${u.id}', '${isAktif ? 'nonaktif' : 'aktif'}')" title="Ubah Status">
-                    <i class="fa-solid fa-power-off"></i>
-                  </button>
-                  <button class="btn-row-action delete" onclick="deleteUser('${u.id}', '${u.username}')" title="Hapus Akun">
-                    <i class="fa-solid fa-trash"></i>
-                  </button>
-                ` : `<span style="font-size: 0.7rem; color: var(--text-muted);">Protected</span>`}
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join("");
+      cachedUsers = data.users || [];
+      applyUserFilters();
+    } else {
+      tbody.innerHTML = `<tr><td colspan="5" style="color:#fb7185; text-align:center; padding: 20px;">Gagal memuat: ${data.message}</td></tr>`;
     }
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="5" style="color:#fb7185; text-align:center;">Error: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="color:#fb7185; text-align:center; padding: 20px;">Error: ${e.message}</td></tr>`;
   }
 }
 
-async function handleAddUser(event) {
+function handleUserSearch(keyword) {
+  searchUserKeyword = keyword.trim().toLowerCase();
+  applyUserFilters();
+}
+
+function handleUserFilterChange() {
+  filterUserRoleVal = document.getElementById("filterUserRole").value;
+  filterUserLisensiVal = document.getElementById("filterUserLisensi").value;
+  filterUserStatusVal = document.getElementById("filterUserStatus").value;
+  applyUserFilters();
+}
+
+function applyUserFilters() {
+  const tbody = document.getElementById("userTableBody");
+  const today = new Date().toISOString().split("T")[0];
+
+  const filtered = cachedUsers.filter(u => {
+    // 1. Keyword search
+    let matchKeyword = true;
+    if (searchUserKeyword) {
+      matchKeyword = (
+        (u.username && u.username.toLowerCase().includes(searchUserKeyword)) ||
+        (u.nama && u.nama.toLowerCase().includes(searchUserKeyword)) ||
+        (u.instansi && u.instansi.toLowerCase().includes(searchUserKeyword))
+      );
+    }
+
+    // 2. Role filter
+    let matchRole = true;
+    if (filterUserRoleVal) {
+      matchRole = u.role === filterUserRoleVal;
+    }
+
+    // 3. Lisensi filter
+    let matchLisensi = true;
+    if (filterUserLisensiVal) {
+      matchLisensi = u.lisensi === filterUserLisensiVal;
+    }
+
+    // 4. Status filter
+    let matchStatus = true;
+    if (filterUserStatusVal) {
+      if (filterUserStatusVal === "expired") {
+        matchStatus = (u.role !== "super_admin" && u.lisensi !== "Lifetime" && u.masa_aktif && today > u.masa_aktif);
+      } else {
+        matchStatus = u.status_aktif === filterUserStatusVal;
+      }
+    }
+
+    return matchKeyword && matchRole && matchLisensi && matchStatus;
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color: var(--text-muted);"><i class="fa-regular fa-folder-open"></i> Tidak ada akun yang cocok dengan filter.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(u => {
+    const isSuperAdmin = u.role === "super_admin" || u.role === "admin";
+    const isPuskesmas = u.role === "puskesmas";
+    const isRumahSakit = u.role === "rumah_sakit";
+
+    // 1. Role Badge
+    let roleBadge = "";
+    if (isSuperAdmin) {
+      roleBadge = `<span class="badge-role badge-role--superadmin"><i class="fa-solid fa-crown"></i> Super Admin</span>`;
+    } else if (isPuskesmas) {
+      roleBadge = `<span class="badge-role badge-role--puskesmas"><i class="fa-solid fa-hospital"></i> Puskesmas</span>`;
+    } else {
+      roleBadge = `<span class="badge-role badge-role--rumahsakit"><i class="fa-solid fa-hospital-user"></i> Rumah Sakit</span>`;
+    }
+
+    // 2. License & Expiration Tag
+    let licenseBadge = "";
+    if (isSuperAdmin || u.lisensi === "Lifetime") {
+      licenseBadge = `
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <div><span class="badge-license badge-license--lifetime"><i class="fa-solid fa-crown"></i> Lifetime</span></div>
+          <span style="font-size: 0.68rem; color: #cbd5e1; font-weight: 600;">Semua Fitur (Permanen)</span>
+        </div>
+      `;
+    } else {
+      let lisensiType = "Basic";
+      let lisensiClass = "badge-license--basic";
+      let lisensiIcon = "fa-bolt";
+      let lisensiDesc = "Pendaftaran & Pasien Saja";
+
+      if (u.lisensi === "Pro") {
+        lisensiType = "Pro";
+        lisensiClass = "badge-license--pro";
+        lisensiIcon = "fa-gem";
+        lisensiDesc = "Semua Fitur Terbuka";
+      } else if (u.lisensi === "Free") {
+        lisensiType = "Free";
+        lisensiClass = "badge-license--free";
+        lisensiIcon = "fa-gift";
+        lisensiDesc = "Maks 200 Data/Hari";
+      }
+
+      let expInfo = "";
+      if (u.masa_aktif) {
+        const diffDays = Math.ceil((new Date(u.masa_aktif).getTime() - new Date(today).getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays < 0) {
+          expInfo = `<span class="badge-license badge-license--expired">⚠️ Expired (${Math.abs(diffDays)} hr lalu)</span>`;
+        } else if (diffDays <= 30) {
+          expInfo = `<span style="font-size: 0.72rem; color: #fbbf24; font-weight:700;"><i class="fa-solid fa-clock"></i> Sisa ${diffDays} hr (${u.masa_aktif})</span>`;
+        } else {
+          expInfo = `<span style="font-size: 0.72rem; color: var(--text-secondary);"><i class="fa-regular fa-calendar"></i> s.d ${u.masa_aktif}</span>`;
+        }
+      } else {
+        expInfo = `<span style="font-size: 0.72rem; color: var(--text-muted);">-</span>`;
+      }
+
+      licenseBadge = `
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <div style="display: flex; align-items: center; gap: 5px;">
+            <span class="badge-license ${lisensiClass}"><i class="fa-solid ${lisensiIcon}"></i> ${lisensiType}</span>
+            <span style="font-size: 0.68rem; color: ${lisensiType === 'Pro' ? '#38bdf8' : (lisensiType === 'Free' ? '#34d399' : '#94a3b8')}; font-weight: 600;">${lisensiDesc}</span>
+          </div>
+          ${expInfo}
+        </div>
+      `;
+    }
+
+    // 3. Status Badge
+    const isAktif = u.status_aktif === "aktif";
+    const statusBadge = isAktif
+      ? `<span class="badge-status badge-status--selesai"><i class="fa-solid fa-circle-check"></i> Aktif</span>`
+      : `<span class="badge-status badge-risk--danger"><i class="fa-solid fa-circle-xmark"></i> Nonaktif</span>`;
+
+    // 4. Action Buttons
+    const isMasterAdmin = u.id === "usr_admin_master" || u.username === "admin";
+    const actionButtons = isMasterAdmin
+      ? `<span style="font-size: 0.72rem; color: var(--text-muted); font-style: italic;">Protected Master</span>`
+      : `
+        <div class="row-actions-group" style="justify-content: flex-end;">
+          <button class="btn-row-action" onclick="openEditUserModal('${u.id}')" title="Edit Data & Lisensi">
+            <i class="fa-solid fa-pen-to-square"></i>
+          </button>
+          <button class="btn-row-action" onclick="handleResetPasswordPrompt('${u.id}', '${u.username}')" title="Reset Kata Sandi">
+            <i class="fa-solid fa-key"></i>
+          </button>
+          <button class="btn-row-action" onclick="toggleUserStatus('${u.id}', '${isAktif ? 'nonaktif' : 'aktif'}')" title="${isAktif ? 'Nonaktifkan Akun' : 'Aktifkan Akun'}">
+            <i class="fa-solid fa-power-off" style="color: ${isAktif ? 'var(--text-muted)' : '#34d399'};"></i>
+          </button>
+          <button class="btn-row-action delete" onclick="deleteUser('${u.id}', '${u.username}')" title="Hapus Akun">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </div>
+      `;
+
+    return `
+      <tr>
+        <td>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <div style="font-weight: 700; color: #fff; font-size: 0.88rem;">${u.nama || '-'}</div>
+            <div style="font-family: var(--font-mono); font-size: 0.76rem; color: var(--teal-400);">@${u.username}</div>
+            <div style="font-size: 0.74rem; color: var(--text-secondary); display: flex; align-items: center; gap: 5px;">
+              <i class="fa-solid fa-building" style="font-size: 0.68rem; color: var(--text-muted);"></i>
+              <span>${u.instansi || 'Puskesmas'}</span>
+            </div>
+          </div>
+        </td>
+        <td>${roleBadge}</td>
+        <td>${licenseBadge}</td>
+        <td>${statusBadge}</td>
+        <td style="text-align: right;">${actionButtons}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+// ==========================================================================
+// SUB-MODAL: FORM PENDAFTARAN & EDIT AKUN (6 FIELDS)
+// ==========================================================================
+
+function openAddUserModal() {
+  document.getElementById("userFormMode").value = "ADD";
+  document.getElementById("userFormId").value = "";
+  document.getElementById("userFormTitle").textContent = "Pendaftaran Akun Baru";
+  document.getElementById("userFormIcon").className = "fa-solid fa-user-plus";
+  document.getElementById("accountForm").reset();
+
+  document.getElementById("userUsernameInput").readOnly = false;
+  document.getElementById("userPasswordLabel").textContent = "5. Password*";
+  document.getElementById("userPasswordInput").required = true;
+  document.getElementById("passwordEditHint").style.display = "none";
+
+  // Default role: Puskesmas
+  document.getElementById("userRoleSelect").value = "puskesmas";
+  handleRoleSelectionChange("puskesmas");
+
+  // Default masa aktif: 1 tahun dari sekarang (bisa diedit manual bebas oleh admin)
+  setQuickDuration(365);
+
+  updateLicenseInfoBox(document.getElementById("userJenisAkunSelect").value);
+
+  document.getElementById("userFormModal").classList.add("show");
+}
+
+function openEditUserModal(userId) {
+  const user = cachedUsers.find(u => u.id === userId);
+  if (!user) return;
+
+  document.getElementById("userFormMode").value = "EDIT";
+  document.getElementById("userFormId").value = userId;
+  document.getElementById("userFormTitle").textContent = `Edit Akun: ${user.nama}`;
+  document.getElementById("userFormIcon").className = "fa-solid fa-user-pen";
+  document.getElementById("accountForm").reset();
+
+  // 1. Role
+  const roleSelect = document.getElementById("userRoleSelect");
+  roleSelect.value = user.role || "puskesmas";
+
+  // 2. Instansi
+  document.getElementById("userInstansiInput").value = user.instansi || "";
+
+  // 3. Nama Petugas
+  document.getElementById("userNamaInput").value = user.nama || "";
+
+  // 4. Username (dikunci saat edit)
+  const usernameInput = document.getElementById("userUsernameInput");
+  usernameInput.value = user.username;
+  usernameInput.readOnly = true;
+
+  // 5. Password (opsional saat edit)
+  document.getElementById("userPasswordLabel").textContent = "5. Password (Opsional)";
+  document.getElementById("userPasswordInput").required = false;
+  document.getElementById("passwordEditHint").style.display = "block";
+
+  // 6. Jenis Akun & Masa Aktif
+  handleRoleSelectionChange(user.role);
+  const jenisAkunSelect = document.getElementById("userJenisAkunSelect");
+  if (user.role === "super_admin") {
+    jenisAkunSelect.value = "Lifetime";
+  } else {
+    jenisAkunSelect.value = user.lisensi === "Pro" ? "Pro" : (user.lisensi === "Free" ? "Free" : "Basic");
+  }
+
+  if (user.masa_aktif) {
+    document.getElementById("userMasaAktifInput").value = user.masa_aktif;
+  }
+
+  updateLicenseInfoBox(jenisAkunSelect.value);
+
+  document.getElementById("userFormModal").classList.add("show");
+}
+
+function closeUserFormModal() {
+  document.getElementById("userFormModal").classList.remove("show");
+}
+
+function handleRoleSelectionChange(role) {
+  const jenisAkunSelect = document.getElementById("userJenisAkunSelect");
+  const optLifetime = document.getElementById("optLifetime");
+  const fieldMasaAktif = document.getElementById("fieldMasaAktif");
+
+  if (role === "super_admin") {
+    optLifetime.disabled = false;
+    jenisAkunSelect.value = "Lifetime";
+    jenisAkunSelect.disabled = true;
+    if (fieldMasaAktif) fieldMasaAktif.style.display = "none";
+    updateLicenseInfoBox("Lifetime");
+  } else {
+    optLifetime.disabled = true;
+    jenisAkunSelect.disabled = false;
+    if (jenisAkunSelect.value === "Lifetime") {
+      jenisAkunSelect.value = "Free";
+    }
+    if (fieldMasaAktif) fieldMasaAktif.style.display = "flex";
+    updateLicenseInfoBox(jenisAkunSelect.value);
+  }
+}
+
+function handleJenisAkunChange(jenis) {
+  const fieldMasaAktif = document.getElementById("fieldMasaAktif");
+  if (jenis === "Lifetime") {
+    if (fieldMasaAktif) fieldMasaAktif.style.display = "none";
+  } else {
+    if (fieldMasaAktif) fieldMasaAktif.style.display = "flex";
+  }
+  updateLicenseInfoBox(jenis);
+}
+
+function updateLicenseInfoBox(jenis) {
+  const infoText = document.getElementById("licenseInfoText");
+  if (!infoText) return;
+  if (jenis === "Free") {
+    infoText.innerHTML = `<strong>🎁 Lisensi Free:</strong> Fitur sama seperti Basic (Pendaftaran & Pasien saja), namun dibatasi <b>maksimal 200 data entry per hari</b> (dihitung 1 untuk daftar/periksa). Indikator sisa kuota akan tampil di Bot dekat identitas.`;
+  } else if (jenis === "Basic") {
+    infoText.innerHTML = `<strong>⚡ Lisensi Basic:</strong> Di Bot ENCO hanya fitur <b>Pendaftaran</b> dan <b>Pasien</b> yang terbuka (Kuota Unlimited). Fitur lainnya (Konfirmasi Hadir, Pelayanan, BNBA Umum, BNBA Sekolah, dan Tools) otomatis terkunci.`;
+  } else if (jenis === "Pro") {
+    infoText.innerHTML = `<strong>💎 Lisensi Pro:</strong> SEMUA fitur di Bot ENCO terbuka lengkap tanpa batas kuota (Pendaftaran, Pasien, Konfirmasi Hadir, Pelayanan, BNBA Umum, BNBA Sekolah, dan Tools).`;
+  } else if (jenis === "Lifetime") {
+    infoText.innerHTML = `<strong>👑 Lisensi Lifetime (Super Admin):</strong> Akses tak terbatas ke seluruh fitur bot secara permanen tanpa batas masa aktif dan tanpa batas kuota.`;
+  }
+}
+
+function setQuickDuration(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const dateStr = d.toISOString().split("T")[0];
+  document.getElementById("userMasaAktifInput").value = dateStr;
+}
+
+function togglePasswordVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const isPassword = input.type === "password";
+  input.type = isPassword ? "text" : "password";
+  btn.innerHTML = `<i class="fa-solid ${isPassword ? 'fa-eye-slash' : 'fa-eye'}"></i>`;
+}
+
+async function handleAccountFormSubmit(event) {
   event.preventDefault();
-  const username = document.getElementById("newUsername").value.trim();
-  const password = document.getElementById("newPassword").value.trim();
-  const nama = document.getElementById("newNama").value.trim();
-  const masaAktif = document.getElementById("newMasaAktif").value;
+  const mode = document.getElementById("userFormMode").value;
+  const userId = document.getElementById("userFormId").value;
+
+  const role = document.getElementById("userRoleSelect").value;
+  const instansi = document.getElementById("userInstansiInput").value.trim();
+  const nama = document.getElementById("userNamaInput").value.trim();
+  const username = document.getElementById("userUsernameInput").value.trim();
+  const password = document.getElementById("userPasswordInput").value.trim();
+  let jenisAkun = document.getElementById("userJenisAkunSelect").value;
+  let masaAktif = document.getElementById("userMasaAktifInput").value;
+
+  if (role === "super_admin") {
+    jenisAkun = "Lifetime";
+    masaAktif = null;
+  }
+
+  const payload = {
+    role,
+    instansi,
+    nama,
+    username,
+    jenis_akun: jenisAkun,
+    masa_aktif: masaAktif
+  };
+
+  if (password) {
+    payload.password = password;
+  }
+
+  const btn = document.getElementById("btnSaveAccount");
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Menyimpan...`;
 
   try {
-    const res = await fetch("/api/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username,
-        password,
-        nama,
-        role: "petugas",
-        status_aktif: "aktif",
-        masa_aktif: masaAktif
-      })
-    });
+    let res;
+    if (mode === "ADD") {
+      res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      payload.id = userId;
+      res = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    }
 
     const data = await res.json();
     if (res.ok && data.status === "success") {
-      showToast("Akun petugas berhasil dibuat!", "success");
-      document.getElementById("addUserForm").reset();
+      Swal.fire({
+        icon: "success",
+        title: "Berhasil",
+        text: mode === "ADD" ? "Akun faskes berhasil ditambahkan!" : "Data akun berhasil diperbarui!",
+        background: "#131d31",
+        color: "#fff",
+        confirmButtonColor: "#0d9488"
+      });
+      closeUserFormModal();
       loadUserList();
     } else {
-      Swal.fire({ icon: "error", title: "Gagal", text: data.message, background: "#131d31", color: "#fff" });
+      Swal.fire({
+        icon: "error",
+        title: "Gagal Menyimpan",
+        text: data.message,
+        background: "#131d31",
+        color: "#fff",
+        confirmButtonColor: "#f43f5e"
+      });
     }
   } catch (e) {
     Swal.fire({ icon: "error", title: "Error", text: e.message, background: "#131d31", color: "#fff" });
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i class="fa-solid fa-check"></i> <span>Simpan Akun Petugas</span>`;
+  }
+}
+
+// Reset Password Prompt
+async function handleResetPasswordPrompt(userId, username) {
+  const { value: newPassword } = await Swal.fire({
+    title: `Reset Kata Sandi`,
+    html: `Masukkan kata sandi baru untuk akun <strong>@${username}</strong>:`,
+    input: "password",
+    inputPlaceholder: "Kata sandi baru (minimal 6 karakter)",
+    inputAttributes: {
+      autocapitalize: "off",
+      autocorrect: "off"
+    },
+    showCancelButton: true,
+    confirmButtonText: "Simpan Sandi Baru",
+    cancelButtonText: "Batal",
+    background: "#131d31",
+    color: "#fff",
+    confirmButtonColor: "#0d9488",
+    inputValidator: (val) => {
+      if (!val || val.length < 4) {
+        return "Kata sandi minimal 4 karakter!";
+      }
+    }
+  });
+
+  if (newPassword) {
+    try {
+      const res = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: userId, password: newPassword })
+      });
+      const data = await res.json();
+      if (res.ok && data.status === "success") {
+        showToast(`Kata sandi untuk @${username} berhasil direset!`, "success");
+      } else {
+        Swal.fire({ icon: "error", title: "Gagal", text: data.message, background: "#131d31", color: "#fff" });
+      }
+    } catch (e) {
+      showToast("Error: " + e.message, "error");
+    }
   }
 }
 
@@ -1617,6 +2002,8 @@ async function toggleUserStatus(id, newStatus) {
     if (res.ok && data.status === "success") {
       showToast(`Status akun diubah ke ${newStatus}.`, "success");
       loadUserList();
+    } else {
+      showToast(data.message || "Gagal mengubah status.", "error");
     }
   } catch (e) {
     showToast("Gagal mengubah status: " + e.message, "error");
@@ -1625,10 +2012,11 @@ async function toggleUserStatus(id, newStatus) {
 
 async function deleteUser(id, username) {
   Swal.fire({
-    title: `Hapus Akun ${username}?`,
+    title: `Hapus Akun @${username}?`,
+    text: "Akun ini tidak akan dapat login lagi ke Control Panel ataupun ekstensi bot.",
     icon: "warning",
     showCancelButton: true,
-    confirmButtonText: "Ya, Hapus",
+    confirmButtonText: "Ya, Hapus Akun",
     cancelButtonText: "Batal",
     background: "#131d31",
     color: "#fff",
@@ -1639,7 +2027,7 @@ async function deleteUser(id, username) {
         const res = await fetch(`/api/users?id=${encodeURIComponent(id)}`, { method: "DELETE" });
         const data = await res.json();
         if (res.ok && data.status === "success") {
-          showToast("Akun petugas telah dihapus.", "success");
+          showToast(`Akun @${username} berhasil dihapus.`, "success");
           loadUserList();
         } else {
           Swal.fire({ icon: "error", title: "Gagal", text: data.message, background: "#131d31", color: "#fff" });

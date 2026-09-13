@@ -102,17 +102,41 @@ export async function onRequestPost({ request, env }) {
       );
     }
 
+    // Normalisasi Role & Lisensi
+    let normalizedRole = user.role;
+    let normalizedLisensi = user.lisensi || "Basic";
+
+    if (user.role === "admin" || user.role === "super_admin") {
+      normalizedRole = "super_admin";
+      normalizedLisensi = "Lifetime";
+    } else if (user.role === "puskesmas") {
+      normalizedRole = "puskesmas";
+    } else if (user.role === "rumah_sakit") {
+      normalizedRole = "rumah_sakit";
+    } else {
+      if (normalizedLisensi.toUpperCase().includes("RS") || (user.instansi && user.instansi.toLowerCase().includes("rs"))) {
+        normalizedRole = "rumah_sakit";
+      } else {
+        normalizedRole = "puskesmas";
+      }
+    }
+
+    if (normalizedLisensi.toUpperCase().includes("PRO")) normalizedLisensi = "Pro";
+    else if (normalizedLisensi.toUpperCase().includes("LIFETIME")) normalizedLisensi = "Lifetime";
+    else if (normalizedLisensi.toUpperCase().includes("FREE")) normalizedLisensi = "Free";
+    else normalizedLisensi = "Basic";
+
     // Pengecekan Masa Aktif Lisensi:
-    // ATURAN: Admin TIDAK ADA MASA AKTIF (Lifetime).
-    // Masa aktif hanya dicek untuk akun PETUGAS / BIASA.
-    if (user.role === "petugas") {
+    // Super Admin / Lifetime TIDAK ADA MASA AKTIF.
+    // Puskesmas / Rumah Sakit (Free, Basic & Pro) dicek masa aktifnya.
+    if (normalizedRole !== "super_admin" && normalizedLisensi !== "Lifetime") {
       if (user.masa_aktif) {
         const today = new Date().toISOString().split("T")[0];
         if (today > user.masa_aktif) {
           return new Response(
             JSON.stringify({
               status: "error",
-              message: `Masa aktif akun Anda telah berakhir pada ${user.masa_aktif}. Silakan hubungi Admin untuk perpanjangan lisensi.`
+              message: `Masa aktif lisensi akun Anda telah berakhir pada ${user.masa_aktif}. Silakan hubungi Super Admin untuk perpanjangan lisensi.`
             }),
             { status: 403, headers: corsHeaders }
           );
@@ -121,21 +145,43 @@ export async function onRequestPost({ request, env }) {
     }
 
     // Berhasil Login
+    const isSuperAdmin = (normalizedRole === "super_admin");
+    const isLifetime = isSuperAdmin || normalizedLisensi === "Lifetime";
+    const isPro = isLifetime || normalizedLisensi === "Pro";
+    const isFree = !isPro && normalizedLisensi === "Free";
+    const isBasic = !isPro && !isFree;
+
+    const allowedFeatures = isPro
+      ? ["pendaftaran", "pelayanan-instan", "konfirmasi-hadir", "otomasi", "bnba-umum", "bnba-sekolah", "tools", "pengaturan"]
+      : ["pendaftaran", "pelayanan-instan", "pengaturan"];
+
     const safeUser = {
       id: user.id,
       username: user.username,
       nama: user.nama,
-      role: user.role,
+      role: normalizedRole,
       instansi: user.instansi,
       status_aktif: user.status_aktif,
-      masa_aktif: user.role === "admin" ? null : user.masa_aktif,
-      lisensi: user.lisensi
+      masa_aktif: isLifetime ? null : user.masa_aktif,
+      lisensi: normalizedLisensi,
+      is_pro: isPro,
+      is_basic: isBasic,
+      is_free: isFree,
+      is_lifetime: isLifetime,
+      max_daily_quota: isFree ? 200 : null,
+      allowed_features: allowedFeatures
     };
 
     return new Response(
       JSON.stringify({
         status: "success",
-        message: user.role === "admin" ? "Login berhasil (Akun Admin - Akses Lifetime)" : "Login berhasil!",
+        message: isLifetime 
+          ? "Login berhasil (Akses Seluruh Fitur - Lifetime)" 
+          : (isPro 
+              ? "Login berhasil (Lisensi PRO - Seluruh Fitur)" 
+              : (isFree 
+                  ? "Login berhasil (Lisensi FREE - Kuota Maks 200 Data/Hari)" 
+                  : "Login berhasil (Lisensi BASIC - Fitur Pendaftaran & Pasien Unlimited)")),
         user: safeUser
       }),
       { status: 200, headers: corsHeaders }
