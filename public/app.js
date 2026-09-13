@@ -1589,7 +1589,13 @@ function applyUserFilters() {
     // 3. Lisensi filter
     let matchLisensi = true;
     if (filterUserLisensiVal) {
-      matchLisensi = u.lisensi === filterUserLisensiVal;
+      const uLis = String(u.lisensi || "").toUpperCase();
+      const fLis = filterUserLisensiVal.toUpperCase();
+      if (fLis === "BASIC") {
+        matchLisensi = uLis.includes("BASIC") || (!uLis.includes("PRO") && !uLis.includes("FREE") && !uLis.includes("LIFETIME"));
+      } else {
+        matchLisensi = uLis.includes(fLis);
+      }
     }
 
     // 4. Status filter
@@ -1640,12 +1646,13 @@ function applyUserFilters() {
       let lisensiIcon = "fa-bolt";
       let lisensiDesc = "Pendaftaran & Pasien Saja";
 
-      if (u.lisensi === "Pro") {
+      const upperLis = String(u.lisensi || "").toUpperCase();
+      if (upperLis.includes("PRO")) {
         lisensiType = "Pro";
         lisensiClass = "badge-license--pro";
         lisensiIcon = "fa-gem";
         lisensiDesc = "Semua Fitur Terbuka";
-      } else if (u.lisensi === "Free") {
+      } else if (upperLis.includes("FREE")) {
         lisensiType = "Free";
         lisensiClass = "badge-license--free";
         lisensiIcon = "fa-gift";
@@ -1786,10 +1793,15 @@ function openEditUserModal(userId) {
   // 6. Jenis Akun & Masa Aktif
   handleRoleSelectionChange(user.role);
   const jenisAkunSelect = document.getElementById("userJenisAkunSelect");
-  if (user.role === "super_admin") {
+  const upperLis = String(user.lisensi || "").toUpperCase();
+  if (user.role === "super_admin" || upperLis.includes("LIFETIME")) {
     jenisAkunSelect.value = "Lifetime";
+  } else if (upperLis.includes("PRO")) {
+    jenisAkunSelect.value = "Pro";
+  } else if (upperLis.includes("FREE")) {
+    jenisAkunSelect.value = "Free";
   } else {
-    jenisAkunSelect.value = user.lisensi === "Pro" ? "Pro" : (user.lisensi === "Free" ? "Free" : "Basic");
+    jenisAkunSelect.value = "Basic";
   }
 
   if (user.masa_aktif) {
@@ -1890,6 +1902,7 @@ async function handleAccountFormSubmit(event) {
     nama,
     username,
     jenis_akun: jenisAkun,
+    lisensi: jenisAkun,
     masa_aktif: masaAktif
   };
 

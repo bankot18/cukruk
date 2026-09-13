@@ -69,28 +69,28 @@ export async function onRequestGet({ env }) {
     // Normalisasi role & lisensi agar seragam
     const normalizedUsers = (results || []).map(u => {
       let role = u.role;
-      let lisensi = u.lisensi || "Basic";
+      let rawLisensi = String(u.lisensi || "").trim();
+      let upperLisensi = rawLisensi.toUpperCase();
+      let lisensi = "Basic";
 
-      if (role === "admin" || role === "super_admin") {
+      if (role === "admin" || role === "super_admin" || upperLisensi.includes("LIFETIME")) {
         role = "super_admin";
         lisensi = "Lifetime";
-      } else if (role === "puskesmas") {
-        role = "puskesmas";
-      } else if (role === "rumah_sakit") {
-        role = "rumah_sakit";
       } else {
-        // Fallback untuk akun lama bertipe 'petugas'
-        if (lisensi.toUpperCase().includes("RS") || (u.instansi && u.instansi.toLowerCase().includes("rs"))) {
+        if (role === "rumah_sakit" || upperLisensi.includes("RUMAH_SAKIT") || upperLisensi.includes("RS") || (u.instansi && u.instansi.toLowerCase().includes("rs"))) {
           role = "rumah_sakit";
         } else {
           role = "puskesmas";
         }
-      }
 
-      // Bersihkan teks lisensi jika ada tag khusus
-      if (lisensi.includes("PRO")) lisensi = "Pro";
-      else if (lisensi.includes("LIFETIME")) lisensi = "Lifetime";
-      else if (lisensi.includes("BASIC") || lisensi.includes("STANDARD")) lisensi = "Basic";
+        if (upperLisensi.includes("PRO")) {
+          lisensi = "Pro";
+        } else if (upperLisensi.includes("FREE")) {
+          lisensi = "Free";
+        } else {
+          lisensi = "Basic";
+        }
+      }
 
       return {
         ...u,
@@ -124,7 +124,13 @@ export async function onRequestPost({ request, env }) {
     const nama = (body.nama || "").trim();
     const username = (body.username || "").trim().toLowerCase();
     const password = (body.password || "").trim();
-    let jenisAkun = body.jenis_akun || body.lisensi || "Basic";
+    let rawJenis = body.jenis_akun || body.lisensi || "Basic";
+    let upperJenis = String(rawJenis).trim().toUpperCase();
+    let jenisAkun = "Basic";
+    if (upperJenis.includes("PRO")) jenisAkun = "Pro";
+    else if (upperJenis.includes("FREE")) jenisAkun = "Free";
+    else if (upperJenis.includes("LIFETIME")) jenisAkun = "Lifetime";
+
     let masaAktif = body.masa_aktif || null;
     const statusAktif = (body.status_aktif || "aktif").trim().toLowerCase();
 
@@ -144,7 +150,6 @@ export async function onRequestPost({ request, env }) {
     } else {
       // Puskesmas / Rumah Sakit
       if (role !== "rumah_sakit") role = "puskesmas";
-      if (jenisAkun !== "Pro" && jenisAkun !== "Basic" && jenisAkun !== "Free") jenisAkun = "Basic";
       if (!masaAktif) masaAktif = "2026-12-31"; // Default masa aktif
     }
 
@@ -232,8 +237,13 @@ export async function onRequestPatch({ request, env }) {
     let role = body.role !== undefined ? body.role.trim().toLowerCase() : existing.role;
     let instansi = body.instansi !== undefined ? body.instansi.trim() : existing.instansi;
     let nama = body.nama !== undefined ? body.nama.trim() : existing.nama;
-    let password = body.password ? body.password.trim() : existing.password;
-    let jenisAkun = body.jenis_akun || body.lisensi || existing.lisensi;
+    let rawJenis = body.jenis_akun !== undefined ? body.jenis_akun : (body.lisensi !== undefined ? body.lisensi : existing.lisensi);
+    let upperJenis = String(rawJenis || "Basic").trim().toUpperCase();
+    let jenisAkun = "Basic";
+    if (upperJenis.includes("PRO")) jenisAkun = "Pro";
+    else if (upperJenis.includes("FREE")) jenisAkun = "Free";
+    else if (upperJenis.includes("LIFETIME")) jenisAkun = "Lifetime";
+
     let masaAktif = body.masa_aktif !== undefined ? body.masa_aktif : existing.masa_aktif;
     let statusAktif = body.status_aktif !== undefined ? body.status_aktif : existing.status_aktif;
 
