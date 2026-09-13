@@ -9,6 +9,7 @@ import * as authHandler from "./functions/api/auth.js";
 import * as usersHandler from "./functions/api/users.js";
 import * as recordsHandler from "./functions/api/records.js";
 import * as storageHandler from "./functions/api/storage.js";
+import * as botHandler from "./functions/api/bot.js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -27,6 +28,7 @@ export default {
       if (request.method === "GET") return usersHandler.onRequestGet({ request, env });
       if (request.method === "POST") return usersHandler.onRequestPost({ request, env });
       if (request.method === "PATCH" || request.method === "PUT") return usersHandler.onRequestPatch({ request, env });
+      if (request.method === "DELETE") return usersHandler.onRequestDelete({ request, env });
     }
 
     // 3. ROUTING API /api/records
@@ -34,17 +36,25 @@ export default {
       if (request.method === "OPTIONS") return recordsHandler.onRequestOptions({ request, env });
       if (request.method === "GET") return recordsHandler.onRequestGet({ request, env });
       if (request.method === "POST") return recordsHandler.onRequestPost({ request, env });
-      if (request.method === "PATCH") return recordsHandler.onRequestPatch({ request, env });
+      if (request.method === "PATCH" || request.method === "PUT") return recordsHandler.onRequestPatch({ request, env });
+      if (request.method === "DELETE") return recordsHandler.onRequestDelete({ request, env });
     }
 
-    // 4. ROUTING API /api/storage
+    // 4. ROUTING API /api/bot (Telemetry, Re-queue, Speed Control)
+    if (pathname === "/api/bot") {
+      if (request.method === "OPTIONS") return botHandler.onRequestOptions({ request, env });
+      if (request.method === "GET") return botHandler.onRequestGet({ request, env });
+      if (request.method === "POST") return botHandler.onRequestPost({ request, env });
+    }
+
+    // 5. ROUTING API /api/storage
     if (pathname === "/api/storage") {
       if (request.method === "OPTIONS") return storageHandler.onRequestOptions({ request, env });
       if (request.method === "GET") return storageHandler.onRequestGet({ request, env });
       if (request.method === "POST") return storageHandler.onRequestPost({ request, env });
     }
 
-    // 5. STATIC ASSETS (index.html, style.css, app.js dari folder public/)
+    // 6. STATIC ASSETS (index.html, style.css, app.js dari folder public/)
     if (env && env.ASSETS) {
       return env.ASSETS.fetch(request);
     }

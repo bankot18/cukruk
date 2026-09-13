@@ -183,3 +183,50 @@ export async function onRequestPatch({ request, env }) {
     );
   }
 }
+
+export async function onRequestDelete({ request, env }) {
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Content-Type": "application/json"
+  };
+
+  try {
+    const url = new URL(request.url);
+    const id = url.searchParams.get("id");
+
+    if (!id) {
+      return new Response(
+        JSON.stringify({ status: "error", message: "ID User wajib disertakan!" }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    if (!env || !env.DB) {
+      return new Response(
+        JSON.stringify({ status: "success", message: "User berhasil dihapus (Mode Mock)" }),
+        { status: 200, headers: corsHeaders }
+      );
+    }
+
+    // Jangan izinkan menghapus superadmin utama
+    if (id === "usr_admin_master" || id === "admin") {
+      return new Response(
+        JSON.stringify({ status: "error", message: "Akun Super Administrator Utama tidak dapat dihapus!" }),
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
+    await env.DB.prepare("DELETE FROM users WHERE id = ?1").bind(id).run();
+
+    return new Response(
+      JSON.stringify({ status: "success", message: "Akun petugas berhasil dihapus!" }),
+      { status: 200, headers: corsHeaders }
+    );
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ status: "error", message: "Gagal menghapus user: " + err.message }),
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+

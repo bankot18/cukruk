@@ -1,6 +1,6 @@
 /**
  * Cloudflare Pages Function: /api/records
- * Perekaman Data Terpadu (UPSERT NIK) & Pemisahan UMUM vs SEKOLAH
+ * Perekaman Data Terpadu, Pagination, Multi-Filter, Analitik Klinis & Bulk Ingestion
  */
 
 export async function onRequestOptions() {
@@ -8,7 +8,7 @@ export async function onRequestOptions() {
     status: 204,
     headers: {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization"
     }
   });
@@ -24,66 +24,122 @@ export async function onRequestGet({ request, env }) {
   const category = (url.searchParams.get("category") || "SEKOLAH").toUpperCase();
   const search = (url.searchParams.get("search") || "").trim().toLowerCase();
   const status = url.searchParams.get("status");
-  const limit = parseInt(url.searchParams.get("limit") || "100", 10);
-  const offset = parseInt(url.searchParams.get("offset") || "0", 10);
+  const sekolah = url.searchParams.get("sekolah");
+  const risk = url.searchParams.get("risk"); // hipertensi, gula_tinggi, anemia, karies, obesitas
+  const page = parseInt(url.searchParams.get("page") || "1", 10);
+  const limitParam = url.searchParams.get("limit") || "25";
+  const isExportAll = limitParam === "-1" || limitParam.toLowerCase() === "all";
+  const limit = isExportAll ? 5000 : parseInt(limitParam, 10);
+  const offset = (page - 1) * limit;
 
   if (!env || !env.DB) {
-    // Mock sample data jika D1 belum terhubung di lingkungan lokal
-    const sampleData = generateSampleData(category);
+    // Mode Mock jika D1 belum terhubung di preview
+    let sampleData = generateSampleData(category);
+
+    if (status) sampleData = sampleData.filter(r => r.status === status);
+    if (sekolah && category === "SEKOLAH") sampleData = sampleData.filter(r => r.sekolah === sekolah);
+    if (search) {
+      sampleData = sampleData.filter(r => 
+        (r.nik && r.nik.toLowerCase().includes(search)) ||
+        (r.nama && r.nama.toLowerCase().includes(search)) ||
+        (r.sekolah && r.sekolah.toLowerCase().includes(search)) ||
+        (r.alamat && r.alamat.toLowerCase().includes(search))
+      );
+    }
+    if (risk) {
+      sampleData = sampleData.filter(r => filterByRisk(r, risk));
+    }
+
+    const totalCount = sampleData.length;
+    const paginated = isExportAll ? sampleData : sampleData.slice(offset, offset + limit);
+
     return new Response(
       JSON.stringify({
         status: "success",
         category,
-        total: sampleData.length,
-        stats: {
-          total: sampleData.length,
-          selesai: sampleData.filter((r) => r.status === "SELESAI_PEMERIKSAAN").length,
-          terdaftar: sampleData.filter((r) => r.status === "TERDAFTAR").length
+        pagination: {
+          page,
+          limit,
+          total: totalCount,
+          totalPages: Math.ceil(totalCount / limit) || 1
         },
-        records: sampleData
+        stats: calculateMockStats(generateSampleData(category)),
+        records: paginated
       }),
       { status: 200, headers: corsHeaders }
     );
   }
 
   try {
-    let sql = "SELECT * FROM records WHERE category = ?1";
-    const params = [category];
+    let whereClauses = ["category = ?1"];
+    let params = [category];
 
     if (status) {
       params.push(status);
-      sql += ` AND status = ?${params.length}`;
+      whereClauses.push(`status = ?${params.length}`);
+    }
+
+    if (sekolah && category === "SEKOLAH") {
+      params.push(sekolah);
+      whereClauses.push(`sekolah = ?${params.length}`);
     }
 
     if (search) {
       params.push(`%${search}%`);
       const pIdx = params.length;
       if (category === "SEKOLAH") {
-        sql += ` AND (LOWER(nik) LIKE ?${pIdx} OR LOWER(nama) LIKE ?${pIdx} OR LOWER(sekolah) LIKE ?${pIdx} OR LOWER(kelas) LIKE ?${pIdx})`;
+        whereClauses.push(`(LOWER(nik) LIKE ?${pIdx} OR LOWER(nama) LIKE ?${pIdx} OR LOWER(sekolah) LIKE ?${pIdx} OR LOWER(kelas) LIKE ?${pIdx})`);
       } else {
-        sql += ` AND (LOWER(nik) LIKE ?${pIdx} OR LOWER(nama) LIKE ?${pIdx} OR LOWER(no_hp) LIKE ?${pIdx} OR LOWER(alamat) LIKE ?${pIdx})`;
+        whereClauses.push(`(LOWER(nik) LIKE ?${pIdx} OR LOWER(nama) LIKE ?${pIdx} OR LOWER(no_hp) LIKE ?${pIdx} OR LOWER(alamat) LIKE ?${pIdx})`);
       }
     }
 
-    // Hitung statistik
-    const countTotal = await env.DB.prepare("SELECT COUNT(*) as c FROM records WHERE category = ?1").bind(category).first("c");
-    const countSelesai = await env.DB.prepare("SELECT COUNT(*) as c FROM records WHERE category = ?1 AND status = 'SELESAI_PEMERIKSAAN'").bind(category).first("c");
-    const countTerdaftar = await env.DB.prepare("SELECT COUNT(*) as c FROM records WHERE category = ?1 AND status = 'TERDAFTAR'").bind(category).first("c");
+    // Filter kondisi klinis risiko
+    if (risk === "hipertensi") {
+      whereClauses.push(`(td_sistolik >= 140 OR td_diastolik >= 90)`);
+    } else if (risk === "gula_tinggi") {
+      whereClauses.push(`(gula_darah >= 200)`);
+    } else if (risk === "anemia" && category === "SEKOLAH") {
+      whereClauses.push(`(hb IS NOT NULL AND hb > 0 AND hb < 12)`);
+    } else if (risk === "karies" && category === "SEKOLAH") {
+      whereClauses.push(`(karies IS NOT NULL AND karies != '' AND karies != 'Tidak' AND karies != '0')`);
+    } else if (risk === "obesitas") {
+      whereClauses.push(`(bb IS NOT NULL AND tb IS NOT NULL AND (bb / ((tb/100.0) * (tb/100.0))) >= 25.0)`);
+    }
 
-    sql += " ORDER BY updated_at DESC LIMIT ? OFFSET ?";
-    params.push(limit, offset);
+    const whereSql = whereClauses.join(" AND ");
 
-    const { results } = await env.DB.prepare(sql).bind(...params).all();
+    // 1. Hitung total data yang cocok dengan filter
+    const countQuery = `SELECT COUNT(*) as c FROM records WHERE ${whereSql}`;
+    const totalMatching = await env.DB.prepare(countQuery).bind(...params).first("c") || 0;
+
+    // 2. Ambil statistik umum untuk dashboard (tanpa filter pencarian/status)
+    const baseStats = await getAggregatedStats(env.DB, category);
+
+    // 3. Ambil daftar sekolah unik untuk dropdown filter
+    let sekolahList = [];
+    if (category === "SEKOLAH") {
+      const schResults = await env.DB.prepare("SELECT DISTINCT sekolah FROM records WHERE category = 'SEKOLAH' AND sekolah IS NOT NULL AND sekolah != '' ORDER BY sekolah ASC").all();
+      sekolahList = (schResults.results || []).map(r => r.sekolah);
+    }
+
+    // 4. Ambil data dengan Pagination
+    let dataSql = `SELECT * FROM records WHERE ${whereSql} ORDER BY updated_at DESC LIMIT ?${params.length + 1} OFFSET ?${params.length + 2}`;
+    const dataParams = [...params, limit, offset];
+    const { results } = await env.DB.prepare(dataSql).bind(...dataParams).all();
 
     return new Response(
       JSON.stringify({
         status: "success",
         category,
-        stats: {
-          total: countTotal || 0,
-          selesai: countSelesai || 0,
-          terdaftar: countTerdaftar || 0
+        pagination: {
+          page,
+          limit,
+          total: totalMatching,
+          totalPages: Math.ceil(totalMatching / limit) || 1
         },
+        sekolahList,
+        stats: baseStats,
         records: results || []
       }),
       { status: 200, headers: corsHeaders }
@@ -96,9 +152,43 @@ export async function onRequestGet({ request, env }) {
   }
 }
 
+async function getAggregatedStats(db, category) {
+  try {
+    const total = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = ?1").bind(category).first("c") || 0;
+    const selesai = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = ?1 AND status = 'SELESAI_PEMERIKSAAN'").bind(category).first("c") || 0;
+    const terdaftar = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = ?1 AND status = 'TERDAFTAR'").bind(category).first("c") || 0;
+
+    // Statistik klinis
+    const hipertensi = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = ?1 AND (td_sistolik >= 140 OR td_diastolik >= 90)").bind(category).first("c") || 0;
+    const gulaTinggi = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = ?1 AND gula_darah >= 200").bind(category).first("c") || 0;
+    
+    let anemia = 0;
+    let karies = 0;
+    if (category === "SEKOLAH") {
+      anemia = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = 'SEKOLAH' AND hb IS NOT NULL AND hb > 0 AND hb < 12").first("c") || 0;
+      karies = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = 'SEKOLAH' AND karies IS NOT NULL AND karies != '' AND karies != 'Tidak' AND karies != '0'").first("c") || 0;
+    }
+
+    const obesitas = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = ?1 AND bb IS NOT NULL AND tb IS NOT NULL AND (bb / ((tb/100.0) * (tb/100.0))) >= 25.0").bind(category).first("c") || 0;
+
+    return {
+      total,
+      selesai,
+      terdaftar,
+      hipertensi,
+      gulaTinggi,
+      anemia,
+      karies,
+      obesitas
+    };
+  } catch (e) {
+    return { total: 0, selesai: 0, terdaftar: 0, hipertensi: 0, gulaTinggi: 0, anemia: 0, karies: 0, obesitas: 0 };
+  }
+}
+
 /**
  * POST /api/records
- * Tahap Pendaftaran Pasien (UPSERT NIK: Tidak membuat duplikasi baris jika NIK sudah ada)
+ * Mendukung Single Pendaftaran atau Batch / Bulk Import dari Excel/CSV
  */
 export async function onRequestPost({ request, env }) {
   const corsHeaders = {
@@ -107,37 +197,29 @@ export async function onRequestPost({ request, env }) {
   };
 
   try {
-    const data = await request.json();
-    const nik = (data.nik || "").toString().trim();
-    if (!nik) {
+    const body = await request.json();
+
+    // 1. DUKUNGAN BATCH / BULK IMPORT (Array data dari Excel)
+    const items = Array.isArray(body) ? body : (body.bulk || [body]);
+
+    if (!items || items.length === 0) {
       return new Response(
-        JSON.stringify({ status: "error", message: "NIK pasien wajib diisi!" }),
+        JSON.stringify({ status: "error", message: "Data tidak boleh kosong!" }),
         { status: 400, headers: corsHeaders }
       );
     }
 
-    const category = (data.category || "SEKOLAH").toUpperCase();
-    const nama = (data.nama || data.name || "").trim();
-    const tanggalLahir = data.tanggal_lahir || data.tanggalLahir || null;
-    const umur = data.umur ? parseInt(data.umur, 10) : null;
-    const jenisKelamin = data.jenis_kelamin || data.jenisKelamin || null;
-    const nomorTiket = data.nomor_tiket || data.nomorTiket || null;
-    const instansi = data.instansi || "Puskesmas";
-    const sekolah = data.sekolah || null;
-    const kelas = data.kelas || null;
-    const noHp = data.no_hp || data.noHp || null;
-    const alamat = data.alamat || null;
-    const petugasPendaftaran = data.petugas || data.petugas_pendaftaran || "Petugas Bot";
-
     if (!env || !env.DB) {
       return new Response(
-        JSON.stringify({ status: "success", message: "Data pendaftaran tersimpan (Mode Mock)", nik }),
+        JSON.stringify({ status: "success", message: `${items.length} data pendaftaran diproses (Mode Mock)`, total: items.length }),
         { status: 200, headers: corsHeaders }
       );
     }
 
-    // UPSERT: Jika NIK sudah ada, update identitas tanpa membuat duplikat baris
-    const query = `
+    let successCount = 0;
+    let errorCount = 0;
+
+    const upsertStmt = env.DB.prepare(`
       INSERT INTO records (
         nik, category, nama, tanggal_lahir, umur, jenis_kelamin, 
         nomor_tiket, instansi, sekolah, kelas, no_hp, alamat, 
@@ -157,20 +239,55 @@ export async function onRequestPost({ request, env }) {
         alamat = COALESCE(excluded.alamat, records.alamat),
         petugas_pendaftaran = excluded.petugas_pendaftaran,
         updated_at = CURRENT_TIMESTAMP;
-    `;
+    `);
 
-    await env.DB.prepare(query).bind(
-      nik, category, nama, tanggalLahir, umur, jenisKelamin,
-      nomorTiket, instansi, sekolah, kelas, noHp, alamat, petugasPendaftaran
-    ).run();
+    // Jalankan eksekusi batch
+    const statements = [];
+    for (const data of items) {
+      const nik = (data.nik || "").toString().trim();
+      if (!nik) {
+        errorCount++;
+        continue;
+      }
+
+      const category = (data.category || "SEKOLAH").toUpperCase();
+      const nama = (data.nama || data.name || "").trim();
+      const tanggalLahir = data.tanggal_lahir || data.tanggalLahir || null;
+      const umur = data.umur ? parseInt(data.umur, 10) : null;
+      const jenisKelamin = data.jenis_kelamin || data.jenisKelamin || null;
+      const nomorTiket = data.nomor_tiket || data.nomorTiket || null;
+      const instansi = data.instansi || "Puskesmas";
+      const sekolah = data.sekolah || null;
+      const kelas = data.kelas || null;
+      const noHp = data.no_hp || data.noHp || null;
+      const alamat = data.alamat || null;
+      const petugasPendaftaran = data.petugas || data.petugas_pendaftaran || "Petugas Import";
+
+      statements.push(
+        upsertStmt.bind(
+          nik, category, nama, tanggalLahir, umur, jenisKelamin,
+          nomorTiket, instansi, sekolah, kelas, noHp, alamat, petugasPendaftaran
+        )
+      );
+      successCount++;
+    }
+
+    if (statements.length > 0) {
+      await env.DB.batch(statements);
+    }
 
     return new Response(
-      JSON.stringify({ status: "success", message: "Pendaftaran berhasil disimpan ke Cloudflare D1", nik }),
+      JSON.stringify({
+        status: "success",
+        message: `Berhasil memproses ${successCount} data ke Cloudflare D1`,
+        successCount,
+        errorCount
+      }),
       { status: 200, headers: corsHeaders }
     );
   } catch (err) {
     return new Response(
-      JSON.stringify({ status: "error", message: "Gagal menyimpan pendaftaran: " + err.message }),
+      JSON.stringify({ status: "error", message: "Gagal menyimpan data: " + err.message }),
       { status: 500, headers: corsHeaders }
     );
   }
@@ -178,7 +295,7 @@ export async function onRequestPost({ request, env }) {
 
 /**
  * PATCH /api/records
- * Tahap Pemeriksaan Klinis (Menu Pasien): Melengkapi baris NIK yang sama
+ * Update Rekam Medis / Pemeriksaan Klinis Fisik
  */
 export async function onRequestPatch({ request, env }) {
   const corsHeaders = {
@@ -196,147 +313,251 @@ export async function onRequestPatch({ request, env }) {
       );
     }
 
-    const category = (data.category || "SEKOLAH").toUpperCase();
-    const nama = (data.nama || "").trim();
-    const bb = data.bb ? parseFloat(data.bb) : null;
-    const tb = data.tb ? parseFloat(data.tb) : null;
-    const lp = data.lp ? parseFloat(data.lp) : null;
-    const sistol = data.td_sistolik || data.sistol ? parseInt(data.td_sistolik || data.sistol, 10) : null;
-    const diastol = data.td_diastolik || data.diastol ? parseInt(data.td_diastolik || data.diastol, 10) : null;
-    const gula = data.gula_darah || data.gula ? parseInt(data.gula_darah || data.gula, 10) : null;
-    const hb = data.hb ? parseFloat(data.hb) : null;
-    const karies = data.karies || data.gigi || null;
+    const bb = data.bb !== undefined && data.bb !== "" ? parseFloat(data.bb) : null;
+    const tb = data.tb !== undefined && data.tb !== "" ? parseFloat(data.tb) : null;
+    const lp = data.lp !== undefined && data.lp !== "" ? parseFloat(data.lp) : null;
+    const sistol = data.td_sistolik !== undefined && data.td_sistolik !== "" ? parseInt(data.td_sistolik, 10) : null;
+    const diastol = data.td_diastolik !== undefined && data.td_diastolik !== "" ? parseInt(data.td_diastolik, 10) : null;
+    const gula = data.gula_darah !== undefined && data.gula_darah !== "" ? parseInt(data.gula_darah, 10) : null;
+    const hb = data.hb !== undefined && data.hb !== "" ? parseFloat(data.hb) : null;
+    const karies = data.karies || null;
     const kacamata = data.kacamata || null;
     const menstruasi = data.menstruasi || null;
     const kebugaran = data.kebugaran || null;
     const merokok = data.merokok || null;
-    const kadarCo = data.kadar_co || data.kadarCo ? parseInt(data.kadar_co || data.kadarCo, 10) : null;
+    const kadarCo = data.kadar_co !== undefined && data.kadar_co !== "" ? parseInt(data.kadar_co, 10) : null;
     const katarak = data.katarak || null;
     const telinga = data.telinga || null;
     const mata = data.mata || null;
-    const petugasPemeriksaan = data.petugas || data.petugas_pemeriksaan || "Petugas Bot";
+    const petugasPemeriksaan = data.petugas_pemeriksaan || "Petugas CKG";
+    const status = data.status || "SELESAI_PEMERIKSAAN";
+
+    // Update opsional identitas jika diedit
+    const nama = data.nama || null;
+    const sekolah = data.sekolah || null;
+    const kelas = data.kelas || null;
 
     if (!env || !env.DB) {
       return new Response(
-        JSON.stringify({ status: "success", message: "Hasil pemeriksaan tersimpan (Mode Mock)", nik }),
+        JSON.stringify({ status: "success", message: "Data pemeriksaan klinis tersimpan (Mode Mock)", nik }),
         { status: 200, headers: corsHeaders }
       );
     }
 
-    // Melengkapi baris pasien berdasarkan NIK (UPSERT jika pasien belum pernah didaftarkan via bot)
-    const query = `
-      INSERT INTO records (
-        nik, category, nama, bb, tb, lp, td_sistolik, td_diastolik, gula_darah,
-        hb, karies, kacamata, menstruasi, kebugaran, merokok, kadar_co, katarak, telinga, mata,
-        status, petugas_pemeriksaan, updated_at
-      )
-      VALUES (
-        ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9,
-        ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19,
-        'SELESAI_PEMERIKSAAN', ?20, CURRENT_TIMESTAMP
-      )
-      ON CONFLICT(nik) DO UPDATE SET
-        bb = COALESCE(excluded.bb, records.bb),
-        tb = COALESCE(excluded.tb, records.tb),
-        lp = COALESCE(excluded.lp, records.lp),
-        td_sistolik = COALESCE(excluded.td_sistolik, records.td_sistolik),
-        td_diastolik = COALESCE(excluded.td_diastolik, records.td_diastolik),
-        gula_darah = COALESCE(excluded.gula_darah, records.gula_darah),
-        hb = COALESCE(excluded.hb, records.hb),
-        karies = COALESCE(excluded.karies, records.karies),
-        kacamata = COALESCE(excluded.kacamata, records.kacamata),
-        menstruasi = COALESCE(excluded.menstruasi, records.menstruasi),
-        kebugaran = COALESCE(excluded.kebugaran, records.kebugaran),
-        merokok = COALESCE(excluded.merokok, records.merokok),
-        kadar_co = COALESCE(excluded.kadar_co, records.kadar_co),
-        katarak = COALESCE(excluded.katarak, records.katarak),
-        telinga = COALESCE(excluded.telinga, records.telinga),
-        mata = COALESCE(excluded.mata, records.mata),
-        status = 'SELESAI_PEMERIKSAAN',
-        petugas_pemeriksaan = excluded.petugas_pemeriksaan,
-        updated_at = CURRENT_TIMESTAMP;
+    let updateQuery = `
+      UPDATE records SET
+        bb = ?1,
+        tb = ?2,
+        lp = ?3,
+        td_sistolik = ?4,
+        td_diastolik = ?5,
+        gula_darah = ?6,
+        hb = ?7,
+        karies = ?8,
+        kacamata = ?9,
+        menstruasi = ?10,
+        kebugaran = ?11,
+        merokok = ?12,
+        kadar_co = ?13,
+        katarak = ?14,
+        telinga = ?15,
+        mata = ?16,
+        status = ?17,
+        petugas_pemeriksaan = ?18,
+        nama = COALESCE(?19, nama),
+        sekolah = COALESCE(?20, sekolah),
+        kelas = COALESCE(?21, kelas),
+        updated_at = CURRENT_TIMESTAMP
+      WHERE nik = ?22
     `;
 
-    await env.DB.prepare(query).bind(
-      nik, category, nama || "Pasien Langsung", bb, tb, lp, sistol, diastol, gula,
-      hb, karies, kacamata, menstruasi, kebugaran, merokok, kadarCo, katarak, telinga, mata,
-      petugasPemeriksaan
+    await env.DB.prepare(updateQuery).bind(
+      bb, tb, lp, sistol, diastol, gula, hb, karies, kacamata,
+      menstruasi, kebugaran, merokok, kadarCo, katarak, telinga,
+      mata, status, petugasPemeriksaan, nama, sekolah, kelas, nik
     ).run();
 
     return new Response(
-      JSON.stringify({ status: "success", message: "Hasil pemeriksaan klinis berhasil diperbarui di D1", nik }),
+      JSON.stringify({ status: "success", message: "Data pemeriksaan berhasil diperbarui!", nik }),
       { status: 200, headers: corsHeaders }
     );
   } catch (err) {
     return new Response(
-      JSON.stringify({ status: "error", message: "Gagal update pemeriksaan: " + err.message }),
+      JSON.stringify({ status: "error", message: "Gagal memperbarui rekam medis: " + err.message }),
       { status: 500, headers: corsHeaders }
     );
   }
+}
+
+/**
+ * DELETE /api/records
+ * Hapus 1 NIK atau Bulk Delete NIKs
+ */
+export async function onRequestDelete({ request, env }) {
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Content-Type": "application/json"
+  };
+
+  try {
+    const url = new URL(request.url);
+    const nik = url.searchParams.get("nik");
+
+    let nikList = [];
+    if (nik) {
+      nikList = [nik];
+    } else {
+      try {
+        const body = await request.json();
+        if (body.niks && Array.isArray(body.niks)) {
+          nikList = body.niks;
+        }
+      } catch (e) {}
+    }
+
+    if (nikList.length === 0) {
+      return new Response(
+        JSON.stringify({ status: "error", message: "NIK yang akan dihapus tidak ditemukan!" }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    if (!env || !env.DB) {
+      return new Response(
+        JSON.stringify({ status: "success", message: `${nikList.length} data berhasil dihapus (Mode Mock)` }),
+        { status: 200, headers: corsHeaders }
+      );
+    }
+
+    const placeholders = nikList.map((_, i) => `?${i + 1}`).join(",");
+    await env.DB.prepare(`DELETE FROM records WHERE nik IN (${placeholders})`).bind(...nikList).run();
+
+    return new Response(
+      JSON.stringify({ status: "success", message: `${nikList.length} rekam data pasien berhasil dihapus.` }),
+      { status: 200, headers: corsHeaders }
+    );
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ status: "error", message: "Gagal menghapus data: " + err.message }),
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+// Helper untuk filter risiko klinis pada mode mock
+function filterByRisk(r, risk) {
+  if (risk === "hipertensi") return (r.td_sistolik >= 140 || r.td_diastolik >= 90);
+  if (risk === "gula_tinggi") return (r.gula_darah >= 200);
+  if (risk === "anemia") return (r.hb && r.hb > 0 && r.hb < 12);
+  if (risk === "karies") return (r.karies && r.karies !== "Tidak" && r.karies !== "0");
+  if (risk === "obesitas") {
+    if (!r.bb || !r.tb) return false;
+    const imt = r.bb / Math.pow(r.tb / 100, 2);
+    return imt >= 25.0;
+  }
+  return true;
+}
+
+function calculateMockStats(records) {
+  const total = records.length;
+  const selesai = records.filter(r => r.status === "SELESAI_PEMERIKSAAN").length;
+  const terdaftar = records.filter(r => r.status === "TERDAFTAR").length;
+  const hipertensi = records.filter(r => r.td_sistolik >= 140 || r.td_diastolik >= 90).length;
+  const gulaTinggi = records.filter(r => r.gula_darah >= 200).length;
+  const anemia = records.filter(r => r.hb && r.hb > 0 && r.hb < 12).length;
+  const karies = records.filter(r => r.karies && r.karies !== "Tidak" && r.karies !== "0").length;
+  const obesitas = records.filter(r => r.bb && r.tb && (r.bb / Math.pow(r.tb / 100, 2)) >= 25.0).length;
+
+  return { total, selesai, terdaftar, hipertensi, gulaTinggi, anemia, karies, obesitas };
 }
 
 function generateSampleData(category) {
   if (category === "SEKOLAH") {
     return [
       {
-        nik: "3201015408100001",
-        nama: "Siti Rahmadani",
-        tanggal_lahir: "14/08/2010",
-        umur: 14,
-        jenis_kelamin: "Perempuan",
-        nomor_tiket: "TIK-SKL-001",
-        sekolah: "SMPN 1 Cibinong",
-        kelas: "8B",
-        bb: 45.5,
-        tb: 153.0,
-        lp: 68.0,
-        td_sistolik: 110,
-        td_diastolik: 70,
+        nik: "3201015607080001",
+        nama: "Ahmad Rizky Pratama",
+        tanggal_lahir: "16/07/2008",
+        umur: 16,
+        jenis_kelamin: "Laki-laki",
+        sekolah: "SMAN 1 Cibinong",
+        kelas: "X IPA 1",
+        nomor_tiket: "TIK-SK-001",
+        bb: 54.5,
+        tb: 165.0,
+        lp: 70.0,
+        td_sistolik: 115,
+        td_diastolik: 75,
         gula_darah: 95,
-        hb: 12.8,
-        karies: "1",
+        hb: 14.2,
+        karies: "0",
         kacamata: "Tidak",
-        menstruasi: "Teratur",
+        menstruasi: "Tidak",
         kebugaran: "Baik",
         status: "SELESAI_PEMERIKSAAN",
         petugas_pendaftaran: "admin",
         petugas_pemeriksaan: "petugas1",
-        updated_at: new Date().toISOString()
+        updated_at: new Date(Date.now() - 3600000).toISOString()
       },
       {
-        nik: "3201011205090002",
-        nama: "Ahmad Maulana",
-        tanggal_lahir: "12/05/2009",
+        nik: "3201016209090002",
+        nama: "Siti Nurhaliza",
+        tanggal_lahir: "22/09/2009",
         umur: 15,
-        jenis_kelamin: "Laki-laki",
-        nomor_tiket: "TIK-SKL-002",
-        sekolah: "SMPN 1 Cibinong",
-        kelas: "9A",
-        bb: 52.0,
-        tb: 162.0,
-        lp: 72.0,
-        td_sistolik: 115,
-        td_diastolik: 75,
-        gula_darah: 102,
-        hb: 14.1,
-        karies: "tidak-ada",
+        jenis_kelamin: "Perempuan",
+        sekolah: "SMAN 1 Cibinong",
+        kelas: "X IPA 2",
+        nomor_tiket: "TIK-SK-002",
+        bb: 42.0,
+        tb: 152.0,
+        lp: 65.0,
+        td_sistolik: 110,
+        td_diastolik: 70,
+        gula_darah: 88,
+        hb: 10.4, // Anemia
+        karies: "2 Gigi",
         kacamata: "Ya",
-        menstruasi: "-",
-        kebugaran: "Baik Sekali",
+        menstruasi: "Ya",
+        kebugaran: "Cukup",
         status: "SELESAI_PEMERIKSAAN",
-        petugas_pendaftaran: "admin",
+        petugas_pendaftaran: "petugas1",
         petugas_pemeriksaan: "petugas1",
-        updated_at: new Date().toISOString()
+        updated_at: new Date(Date.now() - 7200000).toISOString()
       },
       {
-        nik: "3201016503110003",
-        nama: "Rina Permata",
-        tanggal_lahir: "25/03/2011",
-        umur: 13,
+        nik: "3201011103080003",
+        nama: "Dimas Anggara",
+        tanggal_lahir: "11/03/2008",
+        umur: 16,
+        jenis_kelamin: "Laki-laki",
+        sekolah: "SMPN 2 Sukaraja",
+        kelas: "IX B",
+        nomor_tiket: "TIK-SK-003",
+        bb: 78.0, // Obesitas
+        tb: 162.0,
+        lp: 88.0,
+        td_sistolik: 145, // Hipertensi
+        td_diastolik: 92,
+        gula_darah: 140,
+        hb: 13.8,
+        karies: "3 Gigi",
+        kacamata: "Tidak",
+        menstruasi: "Tidak",
+        kebugaran: "Kurang",
+        status: "SELESAI_PEMERIKSAAN",
+        petugas_pendaftaran: "petugas1",
+        petugas_pemeriksaan: "petugas1",
+        updated_at: new Date(Date.now() - 10800000).toISOString()
+      },
+      {
+        nik: "3201014512080004",
+        nama: "Putri Rahmadani",
+        tanggal_lahir: "05/12/2008",
+        umur: 16,
         jenis_kelamin: "Perempuan",
-        nomor_tiket: "TIK-SKL-003",
-        sekolah: "SMPN 1 Cibinong",
-        kelas: "7C",
+        sekolah: "SMPN 2 Sukaraja",
+        kelas: "IX A",
+        nomor_tiket: "TIK-SK-004",
         bb: null,
         tb: null,
         lp: null,
@@ -351,7 +572,7 @@ function generateSampleData(category) {
         status: "TERDAFTAR",
         petugas_pendaftaran: "petugas1",
         petugas_pemeriksaan: null,
-        updated_at: new Date().toISOString()
+        updated_at: new Date(Date.now() - 14400000).toISOString()
       }
     ];
   } else {
@@ -379,15 +600,40 @@ function generateSampleData(category) {
         status: "SELESAI_PEMERIKSAAN",
         petugas_pendaftaran: "admin",
         petugas_pemeriksaan: "petugas1",
-        updated_at: new Date().toISOString()
+        updated_at: new Date(Date.now() - 3600000).toISOString()
       },
       {
-        nik: "3201014506900002",
+        nik: "3201011502750002",
+        nama: "H. Supriyadi",
+        tanggal_lahir: "15/02/1975",
+        umur: 49,
+        jenis_kelamin: "Laki-laki",
+        nomor_tiket: "TIK-UM-002",
+        no_hp: "081388776655",
+        alamat: "RT 01 / RW 03 Desa Karang Asem",
+        bb: 76.0,
+        tb: 164.0,
+        lp: 92.0,
+        td_sistolik: 155, // Hipertensi
+        td_diastolik: 98,
+        gula_darah: 215, // Gula tinggi
+        merokok: "Ya",
+        kadar_co: 8,
+        katarak: "Kekeruhan Ringan",
+        telinga: "Normal",
+        mata: "Visus Menurun",
+        status: "SELESAI_PEMERIKSAAN",
+        petugas_pendaftaran: "petugas1",
+        petugas_pemeriksaan: "petugas1",
+        updated_at: new Date(Date.now() - 7200000).toISOString()
+      },
+      {
+        nik: "3201014506900003",
         nama: "Dewi Lestari",
         tanggal_lahir: "05/06/1990",
         umur: 34,
         jenis_kelamin: "Perempuan",
-        nomor_tiket: "TIK-UM-002",
+        nomor_tiket: "TIK-UM-003",
         no_hp: "085678901234",
         alamat: "RT 04 / RW 02 Desa Sukamaju",
         bb: null,
@@ -404,7 +650,7 @@ function generateSampleData(category) {
         status: "TERDAFTAR",
         petugas_pendaftaran: "petugas1",
         petugas_pemeriksaan: null,
-        updated_at: new Date().toISOString()
+        updated_at: new Date(Date.now() - 10800000).toISOString()
       }
     ];
   }

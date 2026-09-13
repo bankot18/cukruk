@@ -3,43 +3,49 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Control Panel & Real-Time Analytics - ENCO (Entry CKG Otomatis)</title>
+  <title>ENCO Enterprise - Control Panel & Clinical Intelligence</title>
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-  <!-- SheetJS (XLSX) untuk Konversi CSV-to-XLSX On-The-Fly di Browser -->
+  <!-- Chart.js untuk Visual Analytics Medis -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- SheetJS (XLSX) untuk Ingesti Excel & Multi-sheet Export -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <!-- SweetAlert2 untuk Dialog Modern -->
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-  <!-- Custom Stylesheet -->
+  <!-- Custom Executive Stylesheet -->
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <!-- ==========================================================================
-       SCREEN 1: NEON AUTH / LOGIN
+       SCREEN 1: AUTHENTICATION / LOGIN
        ========================================================================== -->
   <div id="auth-screen" class="auth-wrapper">
-    <div class="neon-auth-card">
+    <div class="auth-card">
       <div class="auth-header">
-        <h1 class="auth-logo-text">ENCO</h1>
-        <p class="auth-subtitle">ENTRY CKG OTOMATIS — CONTROL PANEL</p>
-        <p class="auth-tagline">Cloudflare Native Edge Engine (Pages + D1 + R2)</p>
+        <div class="auth-badge">
+          <i class="fa-solid fa-shield-halved"></i>
+          <span>Cloudflare Edge D1 + R2</span>
+        </div>
+        <h1 class="auth-title">ENCO Command Center</h1>
+        <p class="auth-subtitle">Entry CKG Otomatis & Intelligence Skrining Kesehatan</p>
       </div>
 
       <form id="loginForm" class="auth-form" onsubmit="handleLoginSubmit(event)">
         <div class="input-field">
-          <label for="inputUsername">Username / ID Petugas</label>
+          <label for="inputUsername">Username Petugas / Administrator</label>
           <div class="input-box">
-            <i class="fa-solid fa-user-shield"></i>
+            <i class="fa-solid fa-user"></i>
             <input type="text" id="inputUsername" placeholder="Masukkan username" required autocomplete="username" value="admin">
           </div>
         </div>
@@ -53,19 +59,19 @@
         </div>
 
         <button type="submit" class="btn-auth-submit" id="btnLoginSubmit">
-          <span>MASUK PANEL</span>
-          <i class="fa-solid fa-arrow-right-to-bracket"></i>
+          <span>Masuk ke Command Center</span>
+          <i class="fa-solid fa-arrow-right"></i>
         </button>
       </form>
 
-      <div class="auth-quick-preset">
-        <div class="quick-preset-title">Quick Demo Credentials:</div>
+      <div class="auth-presets">
+        <div class="auth-presets-title">Akses Cepat Demo:</div>
         <div class="preset-buttons">
           <button type="button" class="btn-preset" onclick="fillCredentials('admin', 'admin123')">
-            <i class="fa-solid fa-crown" style="color: #fbbf24;"></i> Admin (Lifetime)
+            <i class="fa-solid fa-crown" style="color: #fbbf24;"></i> Super Admin
           </button>
           <button type="button" class="btn-preset" onclick="fillCredentials('petugas1', 'petugas123')">
-            <i class="fa-solid fa-user-nurse" style="color: #38bdf8;"></i> Petugas Skrining
+            <i class="fa-solid fa-user-nurse" style="color: #38bdf8;"></i> Petugas Lapangan
           </button>
         </div>
       </div>
@@ -73,63 +79,78 @@
   </div>
 
   <!-- ==========================================================================
-       SCREEN 2: DASHBOARD UTAMA
+       SCREEN 2: MAIN DASHBOARD
        ========================================================================== -->
   <div id="dashboard-screen" class="app-container" style="display: none;">
     
     <!-- SIDEBAR -->
-    <aside class="app-sidebar">
+    <aside class="app-sidebar" id="appSidebar">
       <div class="sidebar-top">
         <div class="sidebar-brand">
-          <div class="brand-icon">⚡</div>
+          <div class="brand-icon-box">
+            <i class="fa-solid fa-heart-pulse"></i>
+          </div>
           <div>
-            <div class="brand-title">ENCO</div>
-            <div class="brand-subtitle">Control Panel D1</div>
+            <div class="brand-name">ENCO PRO</div>
+            <div class="brand-subtitle">Clinical Intelligence</div>
           </div>
         </div>
 
-        <div class="sidebar-nav-label">Menu Navigasi</div>
-        <nav class="sidebar-nav">
-          <button class="nav-link active" id="navSekolah" onclick="switchCategory('SEKOLAH')">
+        <!-- Navigation Menu -->
+        <div class="sidebar-nav-section">
+          <div class="sidebar-label">Skrining Kesehatan</div>
+          <button class="sidebar-nav-btn active" id="navSekolah" onclick="switchCategory('SEKOLAH')">
             <i class="fa-solid fa-school"></i>
-            <span>Data Siswa (Sekolah)</span>
-            <span class="nav-badge" id="badgeCountSekolah">0</span>
+            <span>Siswa (Sekolah)</span>
+            <span class="nav-counter" id="badgeCountSekolah">0</span>
           </button>
-          <button class="nav-link" id="navUmum" onclick="switchCategory('UMUM')">
+          <button class="sidebar-nav-btn" id="navUmum" onclick="switchCategory('UMUM')">
             <i class="fa-solid fa-users"></i>
-            <span>Data Warga (Umum)</span>
-            <span class="nav-badge" id="badgeCountUmum">0</span>
+            <span>Warga (Umum / PTM)</span>
+            <span class="nav-counter" id="badgeCountUmum">0</span>
           </button>
-          
-          <!-- Menu Khusus Admin -->
-          <div id="adminMenuSection" style="margin-top: 16px;">
-            <div class="sidebar-nav-label">Administrator</div>
-            <button class="nav-link" id="navUsers" onclick="openUserModal()">
-              <i class="fa-solid fa-user-gear"></i>
-              <span>Kelola Petugas</span>
-            </button>
-            <button class="nav-link" id="navBackup" onclick="openBackupModal()">
-              <i class="fa-solid fa-cloud-arrow-up"></i>
-              <span>Arsip Cloudflare R2</span>
-            </button>
-          </div>
-        </nav>
+        </div>
+
+        <div class="sidebar-nav-section">
+          <div class="sidebar-label">Manajemen Data</div>
+          <button class="sidebar-nav-btn" onclick="openImportModal()">
+            <i class="fa-solid fa-file-excel"></i>
+            <span>Smart Import Excel</span>
+          </button>
+          <button class="sidebar-nav-btn" onclick="openAddPatientModal()">
+            <i class="fa-solid fa-user-plus"></i>
+            <span>Input Pasien Manual</span>
+          </button>
+        </div>
+
+        <!-- Admin Only Menu -->
+        <div class="sidebar-nav-section" id="adminMenuSection">
+          <div class="sidebar-label">Pusat Administrator</div>
+          <button class="sidebar-nav-btn" id="navUsers" onclick="openUserModal()">
+            <i class="fa-solid fa-user-gear"></i>
+            <span>Kelola Akun Petugas</span>
+          </button>
+          <button class="sidebar-nav-btn" id="navBackup" onclick="openBackupModal()">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span>Arsip Cloudflare R2</span>
+          </button>
+        </div>
       </div>
 
-      <!-- SIDEBAR FOOTER (USER INFO) -->
+      <!-- User Profile Footer -->
       <div class="sidebar-footer">
-        <div class="user-profile-card">
-          <div class="user-info">
-            <div class="user-avatar" id="userAvatar">A</div>
-            <div class="user-meta">
-              <div class="user-name" id="userNameDisplay">Admin</div>
-              <div class="user-license" id="userLicenseDisplay">
-                <i class="fa-solid fa-circle-check"></i>
-                <span>Aktif Selamanya</span>
+        <div class="user-profile-widget">
+          <div class="user-meta-left">
+            <div class="user-avatar-circle" id="userAvatar">A</div>
+            <div>
+              <div class="user-name-text" id="userNameDisplay">Admin</div>
+              <div class="user-role-badge admin" id="userRoleBadge">
+                <i class="fa-solid fa-crown"></i>
+                <span id="userRoleText">Super Admin</span>
               </div>
             </div>
           </div>
-          <button class="btn-logout" onclick="handleLogout()" title="Keluar dari Panel">
+          <button class="btn-sidebar-logout" onclick="handleLogout()" title="Keluar dari Panel">
             <i class="fa-solid fa-right-from-bracket"></i>
           </button>
         </div>
@@ -142,113 +163,295 @@
       <!-- TOPBAR -->
       <header class="app-topbar">
         <div class="topbar-left">
-          <div class="page-title">
-            <span id="pageTitleIcon">🏫</span>
-            <span id="pageTitleText">Data Skrining Anak Sekolah</span>
+          <div class="topbar-title-group">
+            <div class="topbar-page-title">
+              <span id="pageTitleIcon">🏫</span>
+              <span id="pageTitleText">Skrining Anak Sekolah (UKS)</span>
+            </div>
+            <div class="topbar-faskes-badge">
+              <i class="fa-solid fa-hospital"></i>
+              <span id="faskesNameDisplay">Puskesmas Pembina CKG</span>
+            </div>
           </div>
 
-          <!-- Dual Tab Switcher -->
-          <div class="category-tab-switcher">
-            <button class="category-tab-btn active" id="tabBtnSekolah" onclick="switchCategory('SEKOLAH')">
+          <!-- Dual Category Switcher -->
+          <div class="category-segmented-control">
+            <button class="segment-btn active" id="segmentSekolah" onclick="switchCategory('SEKOLAH')">
               <i class="fa-solid fa-graduation-cap"></i>
               <span>SEKOLAH</span>
             </button>
-            <button class="category-tab-btn" id="tabBtnUmum" onclick="switchCategory('UMUM')">
-              <i class="fa-solid fa-user-group"></i>
-              <span>UMUM</span>
+            <button class="segment-btn" id="segmentUmum" onclick="switchCategory('UMUM')">
+              <i class="fa-solid fa-hospital-user"></i>
+              <span>UMUM / PTM</span>
             </button>
           </div>
         </div>
 
-        <!-- Topbar Action Buttons -->
-        <div class="topbar-actions">
-          <!-- Tombol Export Excel Hijau (Konversi On-The-Fly via SheetJS) -->
-          <button class="btn-action btn-action--excel" onclick="exportToExcel()" title="Konversi CSV langsung ke format Excel .xlsx dengan NIK Tipe Teks">
-            <i class="fa-solid fa-file-excel"></i>
-            <span>Export Excel (.xlsx)</span>
+        <div class="topbar-right">
+          <!-- Bot Live Status Pill -->
+          <div class="bot-live-pill" id="botStatusPill" onclick="triggerBotSync()" title="Status Ekstensi Bot ENCO">
+            <span class="bot-pulse-dot"></span>
+            <span id="botStatusText">BOT ONLINE</span>
+          </div>
+
+          <!-- Quick Actions -->
+          <button class="btn-action-outline" onclick="openImportModal()" title="Upload file Excel dari Sekolah/Desa">
+            <i class="fa-solid fa-file-import"></i>
+            <span>Import Excel</span>
           </button>
 
-          <!-- Tombol Download CSV Mentah -->
-          <button class="btn-action btn-action--csv" onclick="exportToRawCsv()" title="Unduh CSV asli tanpa styling">
-            <i class="fa-solid fa-file-csv"></i>
-            <span>Download CSV</span>
+          <button class="btn-action-outline" onclick="exportToMultiSheetExcel()" title="Download Excel Berformat NIK Text">
+            <i class="fa-solid fa-file-excel" style="color: #34d399;"></i>
+            <span>Export Excel</span>
           </button>
 
-          <!-- Tombol Snapshot Backup ke R2 (Admin) -->
-          <button class="btn-action btn-action--backup" id="btnTriggerR2Backup" onclick="triggerR2Backup()" title="Simpan arsip CSV ke Cloudflare R2">
-            <i class="fa-solid fa-cloud"></i>
-            <span>Backup ke R2</span>
+          <button class="btn-action-outline" onclick="printOfficialReport()" title="Cetak Rekapitulasi Resmi Berkop Puskesmas">
+            <i class="fa-solid fa-print"></i>
+            <span>Cetak Rekap</span>
+          </button>
+
+          <button class="btn-action-primary" onclick="loadDashboardData()" title="Segarkan Data Terkini">
+            <i class="fa-solid fa-arrows-rotate"></i>
+            <span>Refresh</span>
           </button>
         </div>
       </header>
 
-      <!-- DASHBOARD BODY -->
-      <div class="dashboard-body">
+      <!-- PRINT OFFICIAL LETTERHEAD (Visible only on Print) -->
+      <div class="print-official-header" style="display: none;">
+        <h2>DINAS KESEHATAN KABUPATEN / KOTA</h2>
+        <h3>UPTD PUSKESMAS INDUK CKG</h3>
+        <p>LAPORAN REKAPITULASI PELAKSANAAN CEK KESEHATAN GRATIS (CKG)</p>
+        <p style="font-size: 0.8rem;">Tanggal Pelaporan: <span id="printDateReport"></span></p>
+      </div>
+
+      <!-- DASHBOARD CONTENT -->
+      <div class="dashboard-content">
         
-        <!-- KPI METRICS GRID -->
-        <div class="kpi-grid">
-          <div class="kpi-card">
-            <div class="kpi-label">Total Pasien Terdaftar</div>
-            <div class="kpi-value" id="kpiTotal">0</div>
-            <div class="kpi-desc">Akumulasi NIK unik di Cloudflare D1</div>
+        <!-- 1. BOT COMMAND CENTER BANNER -->
+        <div class="bot-command-banner">
+          <div class="bot-info-left">
+            <div class="bot-avatar-icon">
+              <i class="fa-solid fa-robot"></i>
+            </div>
+            <div>
+              <div class="bot-title-text">ENCO Telemetry & Fleet Monitor</div>
+              <div class="bot-desc-text" id="botCurrentTaskText">Siap melakukan automasi entry ke portal ASIK Kemenkes</div>
+            </div>
           </div>
 
-          <div class="kpi-card kpi-card--emerald">
-            <div class="kpi-label">Selesai Pemeriksaan</div>
-            <div class="kpi-value" id="kpiSelesai" style="color: #34d399;">0</div>
-            <div class="kpi-desc">Data klinis lengkap & terisi penuh</div>
+          <div class="bot-telemetry-stats">
+            <div class="telemetry-stat-item">
+              <div class="telemetry-stat-val" id="telemetryQueued">0</div>
+              <div class="telemetry-stat-lbl">Antrean Bot</div>
+            </div>
+            <div class="telemetry-stat-item">
+              <div class="telemetry-stat-val" id="telemetrySynced" style="color: #34d399;">0</div>
+              <div class="telemetry-stat-lbl">Tersinkron ASIK</div>
+            </div>
+            <div class="telemetry-stat-item">
+              <div class="telemetry-stat-val" id="telemetryFailed" style="color: #fb7185;">0</div>
+              <div class="telemetry-stat-lbl">Perlu Review</div>
+            </div>
           </div>
 
-          <div class="kpi-card kpi-card--amber">
-            <div class="kpi-label">Belum Diperiksa (Antrean)</div>
-            <div class="kpi-value" id="kpiPending" style="color: #fbbf24;">0</div>
-            <div class="kpi-desc">Hanya data identitas (Menunggu Menu Pasien)</div>
-          </div>
-
-          <div class="kpi-card kpi-card--purple">
-            <div class="kpi-label" id="kpiExtraLabel">Cakupan Skrining</div>
-            <div class="kpi-value" id="kpiExtraValue" style="color: #a78bfa;">0%</div>
-            <div class="kpi-desc" id="kpiExtraDesc">Persentase pasien selesai di-entry</div>
-          </div>
-        </div>
-
-        <!-- FILTER & SEARCH BAR -->
-        <div class="filter-bar">
-          <div class="search-box">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" id="searchInput" placeholder="Cari berdasarkan NIK, Nama, Sekolah, atau Kelas..." oninput="handleSearch(this.value)">
-          </div>
-
-          <div class="filter-select-group">
-            <select class="filter-select" id="filterStatus" onchange="handleFilterChange()">
-              <option value="">Semua Status Data</option>
-              <option value="SELESAI_PEMERIKSAAN">Selesai Pemeriksaan</option>
-              <option value="TERDAFTAR">Belum Diperiksa (Terdaftar Saja)</option>
+          <div class="bot-actions-right">
+            <select class="speed-select" id="botSpeedSelect" onchange="handleSpeedChange(this.value)" title="Jeda jeda pengetikan robot ke portal ASIK">
+              <option value="1000">Kecepatan: Cepat (1.0s)</option>
+              <option value="1500" selected>Kecepatan: Normal (1.5s)</option>
+              <option value="2000">Kecepatan: Santai (2.0s)</option>
+              <option value="3000">Kecepatan: Aman (3.0s)</option>
             </select>
 
-            <button class="btn-action btn-action--csv" onclick="loadDashboardData()" title="Muat Ulang Data">
-              <i class="fa-solid fa-arrows-rotate"></i>
-              <span>Refresh</span>
+            <button class="btn-action-outline" onclick="triggerRequeue()" title="Masukkan kembali data yang belum selesai ke antrean robot">
+              <i class="fa-solid fa-rotate-right"></i>
+              <span>Re-Queue ke Bot</span>
             </button>
           </div>
         </div>
 
-        <!-- DATA TABLE CARD -->
+        <!-- 2. CLINICAL INTELLIGENCE KPI CARDS -->
+        <div class="kpi-grid">
+          <div class="kpi-card kpi-card--primary">
+            <div class="kpi-header">
+              <span class="kpi-label">Total Pasien Terdaftar</span>
+              <div class="kpi-icon-pill"><i class="fa-solid fa-users-line"></i></div>
+            </div>
+            <div class="kpi-value-row">
+              <div class="kpi-value" id="kpiTotal">0</div>
+            </div>
+            <div class="kpi-subtext">Akumulasi NIK terverifikasi di Cloudflare D1</div>
+          </div>
+
+          <div class="kpi-card kpi-card--emerald">
+            <div class="kpi-header">
+              <span class="kpi-label">Selesai Pemeriksaan</span>
+              <div class="kpi-icon-pill"><i class="fa-solid fa-clipboard-check"></i></div>
+            </div>
+            <div class="kpi-value-row">
+              <div class="kpi-value" id="kpiSelesai" style="color: #34d399;">0</div>
+            </div>
+            <div class="kpi-subtext" id="kpiCoverageText">0% cakupan lengkap skrining</div>
+          </div>
+
+          <div class="kpi-card kpi-card--rose">
+            <div class="kpi-header">
+              <span class="kpi-label">Kasus Hipertensi</span>
+              <div class="kpi-icon-pill"><i class="fa-solid fa-heart-crack"></i></div>
+            </div>
+            <div class="kpi-value-row">
+              <div class="kpi-value" id="kpiHipertensi" style="color: #fb7185;">0</div>
+              <span class="kpi-risk-badge" id="kpiHipertensiPct">0%</span>
+            </div>
+            <div class="kpi-subtext">Sistol ≥ 140 atau Diastol ≥ 90 mmHg</div>
+          </div>
+
+          <div class="kpi-card kpi-card--amber" id="kpiDynamicCard">
+            <div class="kpi-header">
+              <span class="kpi-label" id="kpiDynamicLabel">Karies Gigi / Anemia</span>
+              <div class="kpi-icon-pill"><i class="fa-solid fa-triangle-exclamation" id="kpiDynamicIcon"></i></div>
+            </div>
+            <div class="kpi-value-row">
+              <div class="kpi-value" id="kpiDynamicValue" style="color: #fbbf24;">0</div>
+              <span class="kpi-risk-badge" id="kpiDynamicBadge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border-color: rgba(245, 158, 11, 0.3);">UKS Alert</span>
+            </div>
+            <div class="kpi-subtext" id="kpiDynamicDesc">Indikator kesehatan spesifik sasaran</div>
+          </div>
+        </div>
+
+        <!-- 3. VISUAL ANALYTICS CHARTS (Chart.js) -->
+        <div class="analytics-section">
+          <!-- Chart 1: Tren Kecepatan Input Harian -->
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div class="chart-card-title">
+                <i class="fa-solid fa-chart-line"></i>
+                <span>Kecepatan Input & Cakupan Pasien Terakhir</span>
+              </div>
+            </div>
+            <div class="chart-container-box">
+              <canvas id="trendChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Chart 2: Distribusi Status Gizi (IMT) -->
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div class="chart-card-title">
+                <i class="fa-solid fa-weight-scale"></i>
+                <span>Status Gizi (IMT)</span>
+              </div>
+            </div>
+            <div class="chart-container-box">
+              <canvas id="nutritionChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Chart 3: Stratifikasi Risiko Tekanan Darah -->
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div class="chart-card-title">
+                <i class="fa-solid fa-gauge-high"></i>
+                <span>Tekanan Darah (JNC)</span>
+              </div>
+            </div>
+            <div class="chart-container-box">
+              <canvas id="bloodPressureChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. ADVANCED FILTER & ACTION TOOLBAR -->
+        <div class="filter-toolbar">
+          <div class="filter-left-group">
+            <div class="table-search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="searchInput" placeholder="Cari NIK, Nama Pasien, Sekolah, atau Desa..." oninput="handleSearch(this.value)">
+            </div>
+
+            <!-- Dynamic School Filter (Visible for SEKOLAH) -->
+            <select class="filter-select" id="filterSekolah" onchange="handleFilterChange()" style="display: none;">
+              <option value="">Semua Sekolah</option>
+            </select>
+
+            <!-- Clinical Risk Filter -->
+            <select class="filter-select" id="filterRisk" onchange="handleFilterChange()">
+              <option value="">Semua Status Klinis</option>
+              <option value="hipertensi">🚨 Hipertensi (Tensi Tinggi)</option>
+              <option value="gula_tinggi">🩸 Curiga Diabetes (Gula ≥ 200)</option>
+              <option value="obesitas">⚖️ Obesitas (IMT ≥ 25)</option>
+              <option value="anemia">⚠️ Anemia Siswi (HB &lt; 12)</option>
+              <option value="karies">🦷 Karies Gigi</option>
+            </select>
+
+            <!-- Status Pemeriksaan -->
+            <select class="filter-select" id="filterStatus" onchange="handleFilterChange()">
+              <option value="">Semua Status Entry</option>
+              <option value="SELESAI_PEMERIKSAAN">Selesai Pemeriksaan</option>
+              <option value="TERDAFTAR">Belum Pemeriksaan (Antrean)</option>
+            </select>
+          </div>
+
+          <div class="filter-right-group">
+            <button class="btn-action-outline" onclick="resetFilters()" title="Reset semua filter">
+              <i class="fa-solid fa-filter-circle-xmark"></i>
+              <span>Reset</span>
+            </button>
+            <button class="btn-action-outline" id="btnBulkDelete" onclick="handleBulkDelete()" style="display: none; color: #fb7185;">
+              <i class="fa-solid fa-trash-can"></i>
+              <span>Hapus Terpilih (<span id="bulkCount">0</span>)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 5. ENTERPRISE DATA GRID (TABLE) -->
         <div class="table-card">
-          <div class="table-responsive">
-            <table id="mainDataTable">
+          <div class="table-responsive-wrapper">
+            <table class="enterprise-table" id="mainDataTable">
               <thead id="tableHeaderRow">
                 <!-- Header dinamis diinjeksi via JavaScript -->
               </thead>
               <tbody id="tableBody">
                 <tr>
-                  <td colspan="15" class="table-state-box">
-                    <i class="fa-solid fa-circle-notch fa-spin"></i>
-                    <div>Memuat data dari Cloudflare D1...</div>
+                  <td colspan="15" style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                    <i class="fa-solid fa-circle-notch fa-spin fa-2x" style="color: var(--teal-400); margin-bottom: 12px;"></i>
+                    <div>Memuat rekam medis dari Cloudflare Edge D1...</div>
                   </td>
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <!-- 6. PAGINATION CONTROLS -->
+          <div class="pagination-bar">
+            <div class="pagination-left">
+              <span>Menampilkan <strong id="pageRangeText">0 - 0</strong> dari <strong id="pageTotalCount">0</strong> data pasien</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="pageSizeSelect" style="font-size: 0.75rem; color: var(--text-muted);">Per halaman:</label>
+                <select class="filter-select" id="pageSizeSelect" onchange="handlePageSizeChange(this.value)" style="padding: 4px 8px; font-size: 0.75rem;">
+                  <option value="10">10</option>
+                  <option value="25" selected>25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="pagination-nav">
+              <button class="btn-page-nav" id="btnFirstPage" onclick="goToPage(1)" title="Halaman Pertama">
+                <i class="fa-solid fa-angles-left"></i>
+              </button>
+              <button class="btn-page-nav" id="btnPrevPage" onclick="goToPage(currentPage - 1)" title="Halaman Sebelumnya">
+                <i class="fa-solid fa-angle-left"></i>
+              </button>
+              <span class="page-indicator-text">Hal <span id="currentPageDisplay">1</span> / <span id="totalPagesDisplay">1</span></span>
+              <button class="btn-page-nav" id="btnNextPage" onclick="goToPage(currentPage + 1)" title="Halaman Selanjutnya">
+                <i class="fa-solid fa-angle-right"></i>
+              </button>
+              <button class="btn-page-nav" id="btnLastPage" onclick="goToPage(totalPages)" title="Halaman Terakhir">
+                <i class="fa-solid fa-angles-right"></i>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -257,56 +460,278 @@
   </div>
 
   <!-- ==========================================================================
-       MODAL: KELOLA PETUGAS & LISENSI (ADMIN ONLY)
+       DRAWER: PATIENT 360° CLINICAL PROFILE
+       ========================================================================== -->
+  <div class="drawer-backdrop" id="drawerBackdrop" onclick="closePatientDrawer(event)">
+    <aside class="patient-drawer" onclick="event.stopPropagation()">
+      <div class="drawer-header">
+        <div class="drawer-title-group">
+          <div class="drawer-patient-name" id="drawerNama">Nama Pasien</div>
+          <div class="drawer-patient-nik" id="drawerNik">NIK: 3201...</div>
+        </div>
+        <button class="btn-drawer-close" onclick="closePatientDrawer()">&times;</button>
+      </div>
+
+      <div class="drawer-body" id="drawerContent">
+        <!-- Vitals Summary Grid -->
+        <div class="vital-summary-grid">
+          <div class="vital-box">
+            <span class="vital-box-label">Indeks Massa Tubuh (IMT)</span>
+            <div class="vital-box-value" id="drawerImtVal">-</div>
+            <span class="vital-box-tag" id="drawerImtTag">-</span>
+          </div>
+
+          <div class="vital-box">
+            <span class="vital-box-label">Tekanan Darah (Tensi)</span>
+            <div class="vital-box-value" id="drawerTensiVal">-</div>
+            <span class="vital-box-tag" id="drawerTensiTag">-</span>
+          </div>
+
+          <div class="vital-box">
+            <span class="vital-box-label">Gula Darah Sewaktu</span>
+            <div class="vital-box-value" id="drawerGulaVal">-</div>
+            <span class="vital-box-tag" id="drawerGulaTag">-</span>
+          </div>
+
+          <div class="vital-box">
+            <span class="vital-box-label">Berat & Tinggi Badan</span>
+            <div class="vital-box-value" id="drawerBbTbVal">-</div>
+            <span style="font-size: 0.72rem; color: var(--text-muted);" id="drawerLpVal">LP: - cm</span>
+          </div>
+        </div>
+
+        <!-- Detailed Clinical Profile -->
+        <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 16px;">
+          <div style="font-weight: 700; font-size: 0.85rem; color: var(--teal-400); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-notes-medical"></i>
+            <span>Hasil Skrining Laboratorium & Fisik</span>
+          </div>
+          <div id="drawerClinicalDetails" style="display: flex; flex-direction: column; gap: 8px; font-size: 0.82rem;">
+            <!-- Diisi via JS sesuai kategori Sekolah vs Umum -->
+          </div>
+        </div>
+
+        <!-- Metadata & Officers -->
+        <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px;">
+          <div>Petugas Pendaftaran: <strong id="drawerPetugasDaftar" style="color: var(--text-secondary);">-</strong></div>
+          <div>Petugas Pemeriksaan: <strong id="drawerPetugasPeriksa" style="color: var(--text-secondary);">-</strong></div>
+          <div>Waktu Rekam Medis: <strong id="drawerUpdatedAt" style="color: var(--text-secondary);">-</strong></div>
+        </div>
+      </div>
+
+      <div class="drawer-footer">
+        <button class="btn-action-outline" onclick="openEditFromDrawer()">
+          <i class="fa-solid fa-pen-to-square"></i>
+          <span>Edit Rekam Data</span>
+        </button>
+        <button class="btn-action-outline" onclick="deleteFromDrawer()" style="color: #fb7185;">
+          <i class="fa-solid fa-trash"></i>
+          <span>Hapus</span>
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: SMART EXCEL / CSV DRAG-AND-DROP INGESTION
+       ========================================================================== -->
+  <div class="modal-overlay" id="importModal">
+    <div class="modal-card">
+      <div class="modal-card-header">
+        <div class="modal-card-title">
+          <i class="fa-solid fa-file-excel" style="color: #34d399;"></i>
+          <span>Smart Ingesti Excel / CSV Pasien</span>
+        </div>
+        <button class="btn-drawer-close" onclick="closeImportModal()">&times;</button>
+      </div>
+      <div class="modal-card-body">
+        <p style="font-size: 0.82rem; color: var(--text-secondary);">
+          Tarik dan jatuhkan file Excel (<code>.xlsx</code>) atau CSV dari sekolah/desa. Sistem secara otomatis mendeteksi kolom NIK, Nama, dan Tanggal Lahir serta memvalidasi panjang 16 digit NIK.
+        </p>
+
+        <!-- Target Category Selector -->
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
+          <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Target Kategori:</span>
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 0.82rem; cursor: pointer;">
+            <input type="radio" name="importCatTarget" value="SEKOLAH" checked> Sekolah (Siswa)
+          </label>
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 0.82rem; cursor: pointer;">
+            <input type="radio" name="importCatTarget" value="UMUM"> Umum (Warga)
+          </label>
+        </div>
+
+        <!-- Dropzone Box -->
+        <div class="excel-dropzone" id="excelDropzone" onclick="document.getElementById('excelFileInput').click()">
+          <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleExcelFileSelect(this.files)">
+          <div class="dropzone-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+          <div class="dropzone-title">Klik atau Tarik File Excel ke Sini</div>
+          <div class="dropzone-desc">Format yang didukung: .xlsx, .xls, .csv (Maksimal 5.000 baris per file)</div>
+        </div>
+
+        <!-- Ingestion Report & Preview Box -->
+        <div id="importPreviewBox" style="display: none; background: rgba(0,0,0,0.25); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 14px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <strong style="font-size: 0.84rem; color: #fff;">Ringkasan File: <span id="importFileName" style="color: var(--teal-400);"></span></strong>
+            <span class="badge-status badge-status--selesai" id="importValidCount">0 Baris Valid</span>
+          </div>
+          <div id="importWarningBox" style="font-size: 0.76rem; color: #fbbf24; margin-bottom: 10px; display: none;">
+            <i class="fa-solid fa-triangle-exclamation"></i> <span id="importWarningText"></span>
+          </div>
+          <button class="btn-action-primary" id="btnExecuteImport" onclick="executeImport()" style="width: 100%; justify-content: center;">
+            <i class="fa-solid fa-upload"></i>
+            <span>Simpan ke Cloudflare D1 Sekarang</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: EDIT / ADD RECORD MANUAL
+       ========================================================================== -->
+  <div class="modal-overlay" id="editRecordModal">
+    <div class="modal-card">
+      <div class="modal-card-header">
+        <div class="modal-card-title">
+          <i class="fa-solid fa-user-pen" style="color: var(--teal-400);"></i>
+          <span id="editModalTitle">Edit Rekam Pasien</span>
+        </div>
+        <button class="btn-drawer-close" onclick="closeEditRecordModal()">&times;</button>
+      </div>
+      <div class="modal-card-body">
+        <form id="recordForm" onsubmit="handleRecordFormSubmit(event)" style="display: flex; flex-direction: column; gap: 14px;">
+          <input type="hidden" id="formActionType" value="EDIT">
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="input-field">
+              <label>NIK (16 Digit)*</label>
+              <div class="input-box">
+                <input type="text" id="formNik" maxlength="16" placeholder="3201..." required>
+              </div>
+            </div>
+            <div class="input-field">
+              <label>Nama Lengkap*</label>
+              <div class="input-box">
+                <input type="text" id="formNama" placeholder="Nama Pasien" required>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;" id="formSchoolFields">
+            <div class="input-field">
+              <label>Sekolah</label>
+              <div class="input-box">
+                <input type="text" id="formSekolah" placeholder="Nama Sekolah">
+              </div>
+            </div>
+            <div class="input-field">
+              <label>Kelas</label>
+              <div class="input-box">
+                <input type="text" id="formKelas" placeholder="Misal: VII B">
+              </div>
+            </div>
+          </div>
+
+          <!-- Pemeriksaan Fisik -->
+          <div style="font-weight: 700; font-size: 0.82rem; color: var(--teal-400); margin-top: 4px;">Pemeriksaan Fisik & Klinis:</div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+            <div class="input-field">
+              <label>Berat (kg)</label>
+              <div class="input-box">
+                <input type="number" step="0.1" id="formBb" placeholder="50.5">
+              </div>
+            </div>
+            <div class="input-field">
+              <label>Tinggi (cm)</label>
+              <div class="input-box">
+                <input type="number" step="0.1" id="formTb" placeholder="160">
+              </div>
+            </div>
+            <div class="input-field">
+              <label>Lingkar Perut</label>
+              <div class="input-box">
+                <input type="number" step="0.1" id="formLp" placeholder="70">
+              </div>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+            <div class="input-field">
+              <label>Sistol (mmHg)</label>
+              <div class="input-box">
+                <input type="number" id="formSistol" placeholder="120">
+              </div>
+            </div>
+            <div class="input-field">
+              <label>Diastol (mmHg)</label>
+              <div class="input-box">
+                <input type="number" id="formDiastol" placeholder="80">
+              </div>
+            </div>
+            <div class="input-field">
+              <label>Gula Darah (mg/dL)</label>
+              <div class="input-box">
+                <input type="number" id="formGula" placeholder="100">
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+            <button type="button" class="btn-action-outline" onclick="closeEditRecordModal()">Batal</button>
+            <button type="submit" class="btn-action-primary" id="btnSaveRecord">
+              <i class="fa-solid fa-floppy-disk"></i>
+              <span>Simpan Perubahan</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: USER MANAGEMENT (ADMIN ONLY)
        ========================================================================== -->
   <div class="modal-overlay" id="userModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <div class="modal-title">
-          <i class="fa-solid fa-user-shield" style="color: var(--neon-cyan);"></i>
-          <span>Manajemen Petugas & Lisensi</span>
+    <div class="modal-card">
+      <div class="modal-card-header">
+        <div class="modal-card-title">
+          <i class="fa-solid fa-user-shield" style="color: var(--teal-400);"></i>
+          <span>Manajemen Pengguna & Lisensi Petugas</span>
         </div>
-        <button class="modal-close" onclick="closeUserModal()">&times;</button>
+        <button class="btn-drawer-close" onclick="closeUserModal()">&times;</button>
       </div>
-      <div class="modal-body">
+      <div class="modal-card-body">
         
         <!-- Form Tambah User -->
-        <form id="addUserForm" onsubmit="handleAddUser(event)" style="display: flex; flex-direction: column; gap: 12px; background: rgba(0,0,0,0.3); padding: 16px; border-radius: 12px; border: 1px solid var(--border-glass);">
-          <div style="font-weight: 700; font-size: 0.85rem; color: var(--neon-cyan);">+ Tambah Akun Petugas Baru</div>
+        <form id="addUserForm" onsubmit="handleAddUser(event)" style="background: rgba(0,0,0,0.25); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-weight: 700; font-size: 0.84rem; color: var(--teal-400);">+ Tambah Akun Petugas Baru</div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-            <div class="input-box">
-              <input type="text" id="newUsername" placeholder="Username (misal: bidan_ani)" required>
-            </div>
-            <div class="input-box">
-              <input type="password" id="newPassword" placeholder="Password" required>
-            </div>
+            <div class="input-box"><input type="text" id="newUsername" placeholder="Username" required></div>
+            <div class="input-box"><input type="password" id="newPassword" placeholder="Password" required></div>
           </div>
           <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 10px;">
-            <div class="input-box">
-              <input type="text" id="newNama" placeholder="Nama Lengkap Petugas" required>
-            </div>
-            <div class="input-box">
-              <input type="date" id="newMasaAktif" title="Masa Aktif Lisensi" required value="2026-12-31">
-            </div>
+            <div class="input-box"><input type="text" id="newNama" placeholder="Nama Lengkap Petugas" required></div>
+            <div class="input-box"><input type="date" id="newMasaAktif" title="Masa Aktif Lisensi" value="2026-12-31" required></div>
           </div>
-          <button type="submit" class="btn-action btn-action--backup" style="justify-content: center; height: 38px;">
+          <button type="submit" class="btn-action-primary" style="justify-content: center; height: 38px;">
             <i class="fa-solid fa-plus"></i>
             <span>Simpan Akun Petugas</span>
           </button>
         </form>
 
-        <!-- Tabel Daftar User -->
+        <!-- Tabel Petugas -->
         <div>
-          <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 10px;">Daftar Pengguna Terdaftar:</div>
-          <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-glass); border-radius: 10px;">
-            <table style="width: 100%; font-size: 0.78rem;">
+          <div style="font-weight: 700; font-size: 0.84rem; margin-bottom: 8px;">Daftar Akun Petugas:</div>
+          <div style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
+            <table class="enterprise-table" style="font-size: 0.78rem;">
               <thead>
                 <tr>
                   <th>Username</th>
                   <th>Nama</th>
                   <th>Role</th>
-                  <th>Masa Aktif</th>
                   <th>Status</th>
+                  <th>Aksi</th>
                 </tr>
               </thead>
               <tbody id="userTableBody">
@@ -321,36 +746,34 @@
   </div>
 
   <!-- ==========================================================================
-       MODAL: ARSIP BACKUP CLOUDFLARE R2
+       MODAL: ARSIP CLOUDFLARE R2
        ========================================================================== -->
   <div class="modal-overlay" id="backupModal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <div class="modal-title">
-          <i class="fa-solid fa-cloud-arrow-down" style="color: var(--neon-emerald);"></i>
-          <span>Arsip Snapshot Backup Cloudflare R2</span>
+    <div class="modal-card">
+      <div class="modal-card-header">
+        <div class="modal-card-title">
+          <i class="fa-solid fa-cloud-arrow-up" style="color: #34d399;"></i>
+          <span>Arsip Snapshot Cloudflare R2</span>
         </div>
-        <button class="modal-close" onclick="closeBackupModal()">&times;</button>
+        <button class="btn-drawer-close" onclick="closeBackupModal()">&times;</button>
       </div>
-      <div class="modal-body">
-        <p style="font-size: 0.82rem; color: var(--text-muted);">
-          Daftar file arsip <code>.csv</code> ringan yang tersimpan di bucket Cloudflare R2. Anda dapat mengunduh langsung atau mengonversinya ke Excel.
+      <div class="modal-card-body">
+        <p style="font-size: 0.82rem; color: var(--text-secondary);">
+          File arsip cadangan <code>.csv</code> tersimpan secara aman di bucket Cloudflare R2 (Global Object Storage).
         </p>
 
-        <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-          <button class="btn-action btn-action--backup" onclick="triggerR2Backup()" style="height: 38px;">
-            <i class="fa-solid fa-cloud-arrow-up"></i>
-            <span>Buat Snapshot Baru Sekarang</span>
-          </button>
-        </div>
+        <button class="btn-action-primary" onclick="triggerR2Backup()" style="align-self: flex-start;">
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+          <span>Buat Snapshot Baru ke R2</span>
+        </button>
 
-        <div style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border-glass); border-radius: 10px;">
-          <table style="width: 100%; font-size: 0.78rem;">
+        <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); margin-top: 10px;">
+          <table class="enterprise-table" style="font-size: 0.78rem;">
             <thead>
               <tr>
-                <th>Nama File Backup (R2)</th>
+                <th>Nama File Snapshot</th>
                 <th>Ukuran</th>
-                <th>Waktu Dibuat</th>
+                <th>Waktu</th>
                 <th>Aksi</th>
               </tr>
             </thead>
@@ -363,10 +786,10 @@
     </div>
   </div>
 
-  <!-- TOAST CONTAINER -->
+  <!-- TOAST NOTIFICATION CONTAINER -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <!-- App Controller Script -->
+  <!-- APPLICATION CONTROLLER SCRIPT -->
   <script src="app.js"></script>
 </body>
 </html>
