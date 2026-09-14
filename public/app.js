@@ -40,6 +40,24 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function checkExistingSession() {
+  // 1. Dukungan Single Sign-On (SSO) dari ENCO Desktop via URL param sso_user
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const ssoUser = urlParams.get("sso_user");
+    if (ssoUser) {
+      const user = JSON.parse(decodeURIComponent(escape(atob(ssoUser))));
+      if (user && user.username) {
+        localStorage.setItem("enco_session", JSON.stringify(user));
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setupUserSession(user);
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn("[SSO] Gagal memproses sso_user:", e);
+  }
+
+  // 2. Cek sesi tersimpan di localStorage
   const saved = localStorage.getItem("enco_session");
   if (saved) {
     try {

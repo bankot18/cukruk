@@ -411,10 +411,11 @@ export async function onRequestPatch({ request, env }) {
     const petugasPemeriksaan = data.petugas_pemeriksaan || "Petugas CKG";
     const status = data.status || "SELESAI_PEMERIKSAAN";
 
-    // Update opsional identitas jika diedit
+    // Update opsional identitas & tiket jika diedit
     const nama = data.nama || null;
     const sekolah = data.sekolah || null;
     const kelas = data.kelas || null;
+    const nomorTiket = data.nomor_tiket !== undefined ? (data.nomor_tiket || null) : (data.nomorTiket !== undefined ? (data.nomorTiket || null) : null);
 
     if (!env || !env.DB) {
       return new Response(
@@ -425,35 +426,36 @@ export async function onRequestPatch({ request, env }) {
 
     let updateQuery = `
       UPDATE records SET
-        bb = ?1,
-        tb = ?2,
-        lp = ?3,
-        td_sistolik = ?4,
-        td_diastolik = ?5,
-        gula_darah = ?6,
-        hb = ?7,
-        karies = ?8,
-        kacamata = ?9,
-        menstruasi = ?10,
-        kebugaran = ?11,
-        merokok = ?12,
-        kadar_co = ?13,
-        katarak = ?14,
-        telinga = ?15,
-        mata = ?16,
-        status = ?17,
-        petugas_pemeriksaan = ?18,
+        bb = COALESCE(?1, bb),
+        tb = COALESCE(?2, tb),
+        lp = COALESCE(?3, lp),
+        td_sistolik = COALESCE(?4, td_sistolik),
+        td_diastolik = COALESCE(?5, td_diastolik),
+        gula_darah = COALESCE(?6, gula_darah),
+        hb = COALESCE(?7, hb),
+        karies = COALESCE(?8, karies),
+        kacamata = COALESCE(?9, kacamata),
+        menstruasi = COALESCE(?10, menstruasi),
+        kebugaran = COALESCE(?11, kebugaran),
+        merokok = COALESCE(?12, merokok),
+        kadar_co = COALESCE(?13, kadar_co),
+        katarak = COALESCE(?14, katarak),
+        telinga = COALESCE(?15, telinga),
+        mata = COALESCE(?16, mata),
+        status = COALESCE(?17, status),
+        petugas_pemeriksaan = COALESCE(?18, petugas_pemeriksaan),
         nama = COALESCE(?19, nama),
         sekolah = COALESCE(?20, sekolah),
         kelas = COALESCE(?21, kelas),
+        nomor_tiket = COALESCE(?22, nomor_tiket),
         updated_at = CURRENT_TIMESTAMP
-      WHERE nik = ?22
+      WHERE nik = ?23
     `;
 
     await env.DB.prepare(updateQuery).bind(
       bb, tb, lp, sistol, diastol, gula, hb, karies, kacamata,
       menstruasi, kebugaran, merokok, kadarCo, katarak, telinga,
-      mata, status, petugasPemeriksaan, nama, sekolah, kelas, nik
+      mata, status, petugasPemeriksaan, nama, sekolah, kelas, nomorTiket, nik
     ).run();
 
     return new Response(

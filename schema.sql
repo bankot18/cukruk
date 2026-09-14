@@ -80,3 +80,53 @@ CREATE INDEX IF NOT EXISTS idx_records_category ON records(category);
 CREATE INDEX IF NOT EXISTS idx_records_status ON records(status);
 CREATE INDEX IF NOT EXISTS idx_records_sekolah ON records(sekolah);
 CREATE INDEX IF NOT EXISTS idx_records_updated ON records(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_records_instansi ON records(instansi);
+CREATE INDEX IF NOT EXISTS idx_records_instansi_cat ON records(instansi, category);
+CREATE INDEX IF NOT EXISTS idx_records_instansi_sekolah ON records(instansi, sekolah);
+CREATE INDEX IF NOT EXISTS idx_records_instansi_status ON records(instansi, status);
+
+-- 3. TABEL MASTER FASKES (Puskesmas & Rumah Sakit)
+CREATE TABLE IF NOT EXISTS faskes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nama TEXT NOT NULL,
+    tipe TEXT NOT NULL CHECK(tipe IN ('PUSKESMAS', 'RUMAH_SAKIT')),
+    provinsi TEXT NOT NULL,
+    kab_kota TEXT NOT NULL,
+    kecamatan TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(nama, tipe, kab_kota, kecamatan)
+);
+CREATE INDEX IF NOT EXISTS idx_faskes_tipe ON faskes(tipe);
+CREATE INDEX IF NOT EXISTS idx_faskes_nama ON faskes(nama);
+
+-- Seed Data Faskes Awal
+INSERT OR IGNORE INTO faskes (nama, tipe, provinsi, kab_kota, kecamatan) VALUES
+('Puskesmas Cibinong', 'PUSKESMAS', 'Jawa Barat', 'Kab. Bogor', 'Cibinong'),
+('Puskesmas Banjaran', 'PUSKESMAS', 'Jawa Barat', 'Kab. Bandung', 'Banjaran'),
+('Puskesmas Ciawi', 'PUSKESMAS', 'Jawa Barat', 'Kab. Bogor', 'Ciawi'),
+('RSUD Ciawi', 'RUMAH_SAKIT', 'Jawa Barat', 'Kab. Bogor', 'Ciawi'),
+('RSUD Cibinong', 'RUMAH_SAKIT', 'Jawa Barat', 'Kab. Bogor', 'Cibinong');
+
+-- 4. TABEL MASTER SEKOLAH (Per Puskesmas)
+CREATE TABLE IF NOT EXISTS schools (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    instansi TEXT NOT NULL,             -- Nama Puskesmas yang menaungi
+    nama_sekolah TEXT NOT NULL,
+    alamat_sekolah TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(instansi, nama_sekolah, alamat_sekolah)
+);
+CREATE INDEX IF NOT EXISTS idx_schools_instansi ON schools(instansi);
+CREATE INDEX IF NOT EXISTS idx_schools_nama ON schools(nama_sekolah);
+
+-- Seed Data Sekolah Awal untuk Puskesmas Banjaran & Cibinong
+INSERT OR IGNORE INTO schools (instansi, nama_sekolah, alamat_sekolah) VALUES
+('Puskesmas Banjaran', 'MIS PERSIS 278 PANGKALAN', 'Kp Taraju RT 02 RW 05 Tarajusari'),
+('Puskesmas Banjaran', 'SDN BANJARAN 01', 'Jl. Raya Banjaran No. 12'),
+('Puskesmas Banjaran', 'SMAN 1 BANJARAN', 'Jl. Ciapus No. 5'),
+('Puskesmas Cibinong', 'SDN CIBINONG 01', 'Jl. Mayor Oking No. 10 Cibinong'),
+('Puskesmas Cibinong', 'SMPN 1 CIBINONG', 'Jl. Raya Jakarta-Bogor Km. 42');
+
+
