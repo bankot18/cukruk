@@ -10,6 +10,8 @@ import * as usersHandler from "./functions/api/users.js";
 import * as recordsHandler from "./functions/api/records.js";
 import * as storageHandler from "./functions/api/storage.js";
 import * as botHandler from "./functions/api/bot.js";
+import * as faskesHandler from "./functions/api/faskes.js";
+import * as schoolsHandler from "./functions/api/schools.js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -54,7 +56,23 @@ export default {
       if (request.method === "POST") return storageHandler.onRequestPost({ request, env });
     }
 
-    // 6. STATIC ASSETS (index.html, style.css, app.js dari folder public/)
+    // 6. ROUTING API /api/faskes (Master Data Faskes - Puskesmas & Rumah Sakit)
+    if (pathname === "/api/faskes") {
+      if (request.method === "OPTIONS") return faskesHandler.onRequestOptions({ request, env });
+      if (request.method === "GET") return faskesHandler.onRequestGet({ request, env });
+      if (request.method === "POST") return faskesHandler.onRequestPost({ request, env });
+      if (request.method === "DELETE") return faskesHandler.onRequestDelete({ request, env });
+    }
+
+    // 7. ROUTING API /api/schools (Master Data Sekolah per Puskesmas)
+    if (pathname === "/api/schools") {
+      if (request.method === "OPTIONS") return schoolsHandler.onRequestOptions({ request, env });
+      if (request.method === "GET") return schoolsHandler.onRequestGet({ request, env });
+      if (request.method === "POST") return schoolsHandler.onRequestPost({ request, env });
+      if (request.method === "DELETE") return schoolsHandler.onRequestDelete({ request, env });
+    }
+
+    // 8. STATIC ASSETS (index.html, style.css, app.js dari folder public/)
     if (env && env.ASSETS) {
       return env.ASSETS.fetch(request);
     }

@@ -78,9 +78,10 @@ export async function onRequestGet({ request, env }) {
     let whereClauses = ["category = ?1"];
     let params = [category];
 
-    if (instansi && instansi.trim() !== "") {
+    if (instansi && instansi.trim() !== "" && instansi.toUpperCase() !== "ALL") {
       params.push(instansi.trim());
-      whereClauses.push(`instansi = ?${params.length}`);
+      const pIdx = params.length;
+      whereClauses.push(`(LOWER(instansi) = LOWER(?${pIdx}) OR instansi = 'Puskesmas' OR instansi IS NULL OR instansi = '')`);
     }
 
     if (status) {
@@ -177,8 +178,8 @@ async function getAggregatedStats(db, category, instansi = null) {
   try {
     let whereBase = "category = ?1";
     let params = [category];
-    if (instansi && instansi.trim() !== "") {
-      whereBase += " AND instansi = ?2";
+    if (instansi && instansi.trim() !== "" && instansi.toUpperCase() !== "ALL") {
+      whereBase += " AND (LOWER(instansi) = LOWER(?2) OR instansi = 'Puskesmas' OR instansi IS NULL OR instansi = '')";
       params.push(instansi.trim());
     }
 

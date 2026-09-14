@@ -113,6 +113,10 @@
 
         <div class="sidebar-nav-section">
           <div class="sidebar-label">Manajemen Data</div>
+          <button class="sidebar-nav-btn" id="navBankData" onclick="focusBankData()">
+            <i class="fa-solid fa-database" style="color: #38bdf8;"></i>
+            <span>Bank Data Pasien</span>
+          </button>
           <button class="sidebar-nav-btn" onclick="openImportModal()">
             <i class="fa-solid fa-file-excel"></i>
             <span>Smart Import Excel</span>
@@ -366,6 +370,23 @@
             <div class="chart-container-box">
               <canvas id="bloodPressureChart"></canvas>
             </div>
+          </div>
+        <!-- SECTION: BANK DATA PASIEN -->
+        <div class="data-bank-banner" id="dataBankSection">
+          <div class="data-bank-info">
+            <div class="data-bank-icon-box">
+              <i class="fa-solid fa-database"></i>
+            </div>
+            <div>
+              <div class="data-bank-title">Bank Data Pasien (Cloudflare D1)</div>
+              <div class="data-bank-desc">Pusat rekam medis pasien &amp; hasil skrining CKG — tersinkronisasi otomatis dengan Bot ENCO</div>
+            </div>
+          </div>
+          <div class="data-bank-actions">
+            <button class="btn-action-outline" onclick="loadDashboardData()" title="Segarkan Bank Data">
+              <i class="fa-solid fa-arrows-rotate"></i>
+              <span>Sync Cloud</span>
+            </button>
           </div>
         </div>
 

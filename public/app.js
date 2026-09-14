@@ -2387,6 +2387,18 @@ function showToast(message, type = "info") {
   }, 4000);
 }
 
+function focusBankData() {
+  const el = document.getElementById("dataBankSection") || document.getElementById("searchInput");
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    const input = document.getElementById("searchInput");
+    if (input) {
+      setTimeout(() => input.focus(), 400);
+    }
+  }
+}
+window.focusBankData = focusBankData;
+
 // ==========================================================================
 // 17. MASTER DATA FASKES (PUSKESMAS & RUMAH SAKIT)
 // ==========================================================================
@@ -2430,7 +2442,14 @@ async function loadFaskesList() {
 
   try {
     const res = await fetch("/api/faskes");
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseErr) {
+      throw new Error(`Server belum merespons API Faskes dengan JSON (${res.status}): ${text.slice(0, 100) || '(respon kosong)'}`);
+    }
+
     if (res.ok && data.status === "success") {
       cachedFaskes = data.faskes || [];
 
@@ -2444,7 +2463,7 @@ async function loadFaskesList() {
 
       applyFaskesFilters();
     } else {
-      tbody.innerHTML = `<tr><td colspan="7" style="color:#fb7185; text-align:center; padding: 20px;">Gagal memuat: ${data.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" style="color:#fb7185; text-align:center; padding: 20px;">Gagal memuat: ${data.message || 'Kesalahan server'}</td></tr>`;
     }
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="7" style="color:#fb7185; text-align:center; padding: 20px;">Error: ${err.message}</td></tr>`;
@@ -2661,13 +2680,19 @@ async function loadSchoolsList() {
       url += `?instansi=${encodeURIComponent(instansiParam)}`;
     }
     const res = await fetch(url);
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseErr) {
+      throw new Error(`Server belum merespons API Schools dengan JSON (${res.status}): ${text.slice(0, 100) || '(respon kosong)'}`);
+    }
 
     if (res.ok && data.status === "success") {
       cachedSchools = data.schools || [];
       applySchoolsFilters();
     } else {
-      tbody.innerHTML = `<tr><td colspan="5" style="color:#fb7185; text-align:center; padding: 20px;">Gagal memuat: ${data.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="color:#fb7185; text-align:center; padding: 20px;">Gagal memuat: ${data.message || 'Kesalahan server'}</td></tr>`;
     }
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="5" style="color:#fb7185; text-align:center; padding: 20px;">Error: ${err.message}</td></tr>`;
