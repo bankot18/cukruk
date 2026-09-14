@@ -106,7 +106,10 @@ export async function onRequestPost({ request, env }) {
     let normalizedRole = user.role;
     let normalizedLisensi = user.lisensi || "Basic";
 
-    if (user.role === "admin" || user.role === "super_admin") {
+    const rawRole = (user.role || "").toLowerCase();
+    const rawLis = (user.lisensi || "").toUpperCase();
+
+    if (rawRole === "admin" || rawRole === "super_admin" || rawRole === "superadmin" || rawRole.includes("admin") || rawLis.includes("LIFETIME")) {
       normalizedRole = "super_admin";
       normalizedLisensi = "Lifetime";
     } else if (user.role === "puskesmas") {
@@ -128,27 +131,27 @@ export async function onRequestPost({ request, env }) {
 
     // Pengecekan Masa Aktif Lisensi:
     // Super Admin / Lifetime TIDAK ADA MASA AKTIF.
-    // Puskesmas / Rumah Sakit (Free, Basic & Pro) dicek masa aktifnya.
+    // Jika lisensi Basic atau Pro habis masa aktifnya, OTOMATIS TURUN KE FREE (Expired).
+    // Lisensi Free memang tidak memiliki masa aktif (bersifat Expired).
+    let isExpired = false;
     if (normalizedRole !== "super_admin" && normalizedLisensi !== "Lifetime") {
       if (user.masa_aktif) {
         const today = new Date().toISOString().split("T")[0];
         if (today > user.masa_aktif) {
-          return new Response(
-            JSON.stringify({
-              status: "error",
-              message: `Masa aktif lisensi akun Anda telah berakhir pada ${user.masa_aktif}. Silakan hubungi Super Admin untuk perpanjangan lisensi.`
-            }),
-            { status: 403, headers: corsHeaders }
-          );
+          isExpired = true;
+          normalizedLisensi = "Free"; // Otomatis turun ke Free saat masa aktif habis
         }
+      } else {
+        isExpired = true; // Lisensi Free tidak memiliki masa aktif (Expired)
+        normalizedLisensi = "Free";
       }
     }
 
     // Berhasil Login
     const isSuperAdmin = (normalizedRole === "super_admin");
     const isLifetime = isSuperAdmin || normalizedLisensi === "Lifetime";
-    const isPro = isLifetime || normalizedLisensi === "Pro";
-    const isFree = !isPro && normalizedLisensi === "Free";
+    const isPro = !isExpired && (isLifetime || normalizedLisensi === "Pro");
+    const isFree = isExpired || normalizedLisensi === "Free";
     const isBasic = !isPro && !isFree;
 
     const allowedFeatures = isPro
@@ -162,14 +165,17 @@ export async function onRequestPost({ request, env }) {
       role: normalizedRole,
       instansi: user.instansi,
       status_aktif: user.status_aktif,
-      masa_aktif: isLifetime ? null : user.masa_aktif,
-      lisensi: normalizedLisensi,
-      is_pro: isPro,
-      is_basic: isBasic,
-      is_free: isFree,
-      is_lifetime: isLifetime,
-      max_daily_quota: isFree ? 200 : null,
-      allowed_features: allowedFeatures
+      masa_aktif: isLifetime ? null : (isFree ? null : user.masa_aktif),
+      masaAktif: isLifetime ? null : (isFree ? null : user.masa_aktif),
+      lisensi: isLifetime ? "Lifetime" : (isPro ? "Pro" : (isFree ? "Free" : "Basic")),
+      isSuperAdmin,
+      isLifetime,
+      isPro,
+      isBasic,
+      isFree,
+      isExpired,
+      maxDailyQuota: isFree ? 200 : null,
+      allowedFeatures
     };
 
     return new Response(

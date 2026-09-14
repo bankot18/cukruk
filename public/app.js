@@ -128,7 +128,19 @@ function setupUserSession(user) {
   const roleText = document.getElementById("userRoleText");
   const adminSection = document.getElementById("adminMenuSection");
 
-  if (user.role === "admin") {
+  const rawRole = (user.role || "").toString().toLowerCase();
+  const rawLisensi = (user.lisensi || "").toString().toUpperCase();
+  const isSuperAdmin = (
+    rawRole === "super_admin" ||
+    rawRole === "admin" ||
+    rawRole === "superadmin" ||
+    rawRole.includes("admin") ||
+    rawLisensi.includes("LIFETIME") ||
+    user.isSuperAdmin === true ||
+    user.isLifetime === true
+  );
+
+  if (isSuperAdmin) {
     roleBadge.className = "user-role-badge admin";
     roleBadge.innerHTML = `<i class="fa-solid fa-crown" style="color: #fbbf24;"></i> <span>Super Admin</span>`;
     if (adminSection) adminSection.style.display = "flex";
@@ -1643,7 +1655,7 @@ function applyUserFilters() {
     } else {
       let lisensiType = "Basic";
       let lisensiClass = "badge-license--basic";
-      let lisensiIcon = "fa-bolt";
+      let lisensiIcon = "fa-id-badge";
       let lisensiDesc = "Pendaftaran & Pasien Saja";
 
       const upperLis = String(u.lisensi || "").toUpperCase();
@@ -1660,17 +1672,19 @@ function applyUserFilters() {
       }
 
       let expInfo = "";
-      if (u.masa_aktif) {
+      if (lisensiType === "Free") {
+        expInfo = `<span class="badge-license badge-license--expired" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(239, 68, 68, 0.4);"><i class="fa-solid fa-clock-rotate-left"></i> Expired (Maks 200 Data/Hari)</span>`;
+      } else if (u.masa_aktif) {
         const diffDays = Math.ceil((new Date(u.masa_aktif).getTime() - new Date(today).getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays < 0) {
-          expInfo = `<span class="badge-license badge-license--expired">⚠️ Expired (${Math.abs(diffDays)} hr lalu)</span>`;
+          expInfo = `<span class="badge-license badge-license--expired" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: rgba(239, 68, 68, 0.5); font-weight:700;"><i class="fa-solid fa-triangle-exclamation"></i> Expired (Turun ke Free)</span>`;
         } else if (diffDays <= 30) {
           expInfo = `<span style="font-size: 0.72rem; color: #fbbf24; font-weight:700;"><i class="fa-solid fa-clock"></i> Sisa ${diffDays} hr (${u.masa_aktif})</span>`;
         } else {
           expInfo = `<span style="font-size: 0.72rem; color: var(--text-secondary);"><i class="fa-regular fa-calendar"></i> s.d ${u.masa_aktif}</span>`;
         }
       } else {
-        expInfo = `<span style="font-size: 0.72rem; color: var(--text-muted);">-</span>`;
+        expInfo = `<span class="badge-license badge-license--expired" style="background: rgba(239, 68, 68, 0.15); color: #f87171;"><i class="fa-solid fa-triangle-exclamation"></i> Expired (Turun ke Free)</span>`;
       }
 
       licenseBadge = `
@@ -1752,10 +1766,9 @@ function openAddUserModal() {
   document.getElementById("userRoleSelect").value = "puskesmas";
   handleRoleSelectionChange("puskesmas");
 
-  // Default masa aktif: 1 tahun dari sekarang (bisa diedit manual bebas oleh admin)
-  setQuickDuration(365);
-
-  updateLicenseInfoBox(document.getElementById("userJenisAkunSelect").value);
+  // Inisialisasi jenis akun & masa aktif sesuai opsi default
+  const defaultJenis = document.getElementById("userJenisAkunSelect").value;
+  handleJenisAkunChange(defaultJenis);
 
   document.getElementById("userFormModal").classList.add("show");
 }
@@ -1804,11 +1817,11 @@ function openEditUserModal(userId) {
     jenisAkunSelect.value = "Basic";
   }
 
-  if (user.masa_aktif) {
+  handleJenisAkunChange(jenisAkunSelect.value);
+
+  if (jenisAkunSelect.value !== "Free" && user.masa_aktif) {
     document.getElementById("userMasaAktifInput").value = user.masa_aktif;
   }
-
-  updateLicenseInfoBox(jenisAkunSelect.value);
 
   document.getElementById("userFormModal").classList.add("show");
 }
@@ -1834,17 +1847,72 @@ function handleRoleSelectionChange(role) {
     if (jenisAkunSelect.value === "Lifetime") {
       jenisAkunSelect.value = "Free";
     }
-    if (fieldMasaAktif) fieldMasaAktif.style.display = "flex";
-    updateLicenseInfoBox(jenisAkunSelect.value);
+    handleJenisAkunChange(jenisAkunSelect.value);
   }
 }
 
 function handleJenisAkunChange(jenis) {
   const fieldMasaAktif = document.getElementById("fieldMasaAktif");
+  const userMasaAktifInput = document.getElementById("userMasaAktifInput");
+  const labelMasaAktif = document.getElementById("labelMasaAktif");
+  const boxMasaAktif = document.getElementById("boxMasaAktif");
+  const masaAktifHelpText = document.getElementById("masaAktifHelpText");
+  const masaAktifPresets = document.getElementById("masaAktifPresets");
+
   if (jenis === "Lifetime") {
     if (fieldMasaAktif) fieldMasaAktif.style.display = "none";
-  } else {
+    if (userMasaAktifInput) {
+      userMasaAktifInput.required = false;
+      userMasaAktifInput.value = "";
+    }
+  } else if (jenis === "Free") {
+    // Lisensi Free: Tidak ada masa aktif / bersifat Expired (dikunci)
     if (fieldMasaAktif) fieldMasaAktif.style.display = "flex";
+    if (userMasaAktifInput) {
+      userMasaAktifInput.required = false;
+      userMasaAktifInput.disabled = true;
+      userMasaAktifInput.value = "";
+    }
+    if (labelMasaAktif) {
+      labelMasaAktif.innerHTML = 'Masa Aktif Lisensi <span style="color: #ef4444; font-size: 0.72rem; font-weight: 700;">(Terkunci - Bersifat Expired)</span>';
+    }
+    if (boxMasaAktif) {
+      boxMasaAktif.style.opacity = "0.55";
+      boxMasaAktif.style.cursor = "not-allowed";
+      boxMasaAktif.style.background = "rgba(239, 68, 68, 0.08)";
+      boxMasaAktif.style.borderColor = "rgba(239, 68, 68, 0.35)";
+    }
+    if (masaAktifHelpText) {
+      masaAktifHelpText.innerHTML = '<i class="fa-solid fa-lock" style="color: #ef4444;"></i> <span style="color: #ef4444; font-weight: 600;">Lisensi Free tidak memiliki masa aktif (bersifat Expired). Fitur bot tetap aktif dengan batas kuota 200 data entry/hari.</span>';
+    }
+    if (masaAktifPresets) {
+      masaAktifPresets.style.display = "none";
+    }
+  } else {
+    // Basic atau Pro (Bisa diatur manual tanggal aktifnya)
+    if (fieldMasaAktif) fieldMasaAktif.style.display = "flex";
+    if (userMasaAktifInput) {
+      userMasaAktifInput.disabled = false;
+      userMasaAktifInput.required = true;
+      if (!userMasaAktifInput.value) {
+        setQuickDuration(365);
+      }
+    }
+    if (labelMasaAktif) {
+      labelMasaAktif.innerHTML = 'Masa Aktif Lisensi (Diatur Manual)*';
+    }
+    if (boxMasaAktif) {
+      boxMasaAktif.style.opacity = "1";
+      boxMasaAktif.style.cursor = "default";
+      boxMasaAktif.style.background = "";
+      boxMasaAktif.style.borderColor = "";
+    }
+    if (masaAktifHelpText) {
+      masaAktifHelpText.innerHTML = '<i class="fa-solid fa-circle-info" style="color: var(--accent-cyan);"></i> Tanggal masa aktif dapat ditentukan secara manual dan bebas diubah kapan saja oleh Admin.';
+    }
+    if (masaAktifPresets) {
+      masaAktifPresets.style.display = "flex";
+    }
   }
   updateLicenseInfoBox(jenis);
 }
@@ -1855,7 +1923,7 @@ function updateLicenseInfoBox(jenis) {
   if (jenis === "Free") {
     infoText.innerHTML = `<strong>🎁 Lisensi Free:</strong> Fitur sama seperti Basic (Pendaftaran & Pasien saja), namun dibatasi <b>maksimal 200 data entry per hari</b> (dihitung 1 untuk daftar/periksa). Indikator sisa kuota akan tampil di Bot dekat identitas.`;
   } else if (jenis === "Basic") {
-    infoText.innerHTML = `<strong>⚡ Lisensi Basic:</strong> Di Bot ENCO hanya fitur <b>Pendaftaran</b> dan <b>Pasien</b> yang terbuka (Kuota Unlimited). Fitur lainnya (Konfirmasi Hadir, Pelayanan, BNBA Umum, BNBA Sekolah, dan Tools) otomatis terkunci.`;
+    infoText.innerHTML = `<strong>Lisensi Basic:</strong> Di Bot ENCO hanya fitur <b>Pendaftaran</b> dan <b>Pasien</b> yang terbuka (Kuota Unlimited). Fitur lainnya (Konfirmasi Hadir, Pelayanan, BNBA Umum, BNBA Sekolah, dan Tools) otomatis terkunci.`;
   } else if (jenis === "Pro") {
     infoText.innerHTML = `<strong>💎 Lisensi Pro:</strong> SEMUA fitur di Bot ENCO terbuka lengkap tanpa batas kuota (Pendaftaran, Pasien, Konfirmasi Hadir, Pelayanan, BNBA Umum, BNBA Sekolah, dan Tools).`;
   } else if (jenis === "Lifetime") {
@@ -1891,8 +1959,8 @@ async function handleAccountFormSubmit(event) {
   let jenisAkun = document.getElementById("userJenisAkunSelect").value;
   let masaAktif = document.getElementById("userMasaAktifInput").value;
 
-  if (role === "super_admin") {
-    jenisAkun = "Lifetime";
+  if (role === "super_admin" || jenisAkun === "Lifetime" || jenisAkun === "Free") {
+    if (role === "super_admin") jenisAkun = "Lifetime";
     masaAktif = null;
   }
 

@@ -73,7 +73,7 @@ export async function onRequestGet({ env }) {
       let upperLisensi = rawLisensi.toUpperCase();
       let lisensi = "Basic";
 
-      if (role === "admin" || role === "super_admin" || upperLisensi.includes("LIFETIME")) {
+      if (role === "admin" || role === "super_admin" || role === "superadmin" || role.includes("admin") || upperLisensi.includes("LIFETIME")) {
         role = "super_admin";
         lisensi = "Lifetime";
       } else {
@@ -143,7 +143,7 @@ export async function onRequestPost({ request, env }) {
     }
 
     // Aturan Khusus Role:
-    if (role === "super_admin" || role === "admin") {
+    if (role === "super_admin" || role === "admin" || role === "superadmin" || role.includes("admin") || upperJenis.includes("LIFETIME")) {
       role = "super_admin";
       jenisAkun = "Lifetime";
       masaAktif = null; // Lifetime tidak memiliki batasan tanggal expired
@@ -247,7 +247,7 @@ export async function onRequestPatch({ request, env }) {
     let masaAktif = body.masa_aktif !== undefined ? body.masa_aktif : existing.masa_aktif;
     let statusAktif = body.status_aktif !== undefined ? body.status_aktif : existing.status_aktif;
 
-    if (role === "super_admin" || role === "admin") {
+    if (role === "super_admin" || role === "admin" || role === "superadmin" || role.includes("admin") || upperJenis.includes("LIFETIME")) {
       role = "super_admin";
       jenisAkun = "Lifetime";
       masaAktif = null;

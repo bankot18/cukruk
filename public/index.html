@@ -728,7 +728,7 @@
               <option value="">Semua Lisensi</option>
               <option value="Lifetime">⭐ Lifetime (Super Admin)</option>
               <option value="Pro">💎 Pro</option>
-              <option value="Basic">⚡ Basic</option>
+              <option value="Basic">Basic</option>
               <option value="Free">🎁 Free (200 Data/Hari)</option>
             </select>
 
@@ -847,22 +847,22 @@
             </div>
             <!-- License Feature Guidance Note -->
             <div id="licenseInfoBox" style="margin-top: 6px; padding: 8px 10px; border-radius: 6px; font-size: 0.73rem; line-height: 1.4; background: rgba(0, 212, 255, 0.08); border-left: 3px solid var(--accent-cyan); color: var(--text-secondary);">
-              <span id="licenseInfoText"><strong>⚡ Lisensi Basic:</strong> Di Bot ENCO hanya fitur <b>Pendaftaran</b> dan <b>Pasien</b> yang terbuka. Fitur lainnya (Konfirmasi Hadir, Pelayanan, BNBA Umum, BNBA Sekolah, dan Tools) otomatis terkunci.</span>
+              <span id="licenseInfoText"><strong>Lisensi Basic:</strong> Di Bot ENCO hanya fitur <b>Pendaftaran</b> dan <b>Pasien</b> yang terbuka. Fitur lainnya (Konfirmasi Hadir, Pelayanan, BNBA Umum, BNBA Sekolah, dan Tools) otomatis terkunci.</span>
             </div>
           </div>
 
-          <!-- Masa Aktif (Diatur Manual oleh Admin, Tersembunyi otomatis jika Super Admin / Lifetime) -->
+          <!-- Masa Aktif (Diatur Manual oleh Admin, Tersembunyi jika Super Admin / Lifetime, Dikunci jika Free) -->
           <div class="input-field" id="fieldMasaAktif">
-            <label>Masa Aktif Lisensi (Diatur Manual)*</label>
-            <div class="input-box">
-              <i class="fa-solid fa-calendar-days"></i>
+            <label id="labelMasaAktif">Masa Aktif Lisensi (Diatur Manual)*</label>
+            <div class="input-box" id="boxMasaAktif">
+              <i class="fa-solid fa-calendar-days" id="iconMasaAktif"></i>
               <input type="date" id="userMasaAktifInput" value="2026-12-31" required>
             </div>
-            <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 3px;">
+            <span id="masaAktifHelpText" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 3px;">
               <i class="fa-solid fa-circle-info" style="color: var(--accent-cyan);"></i> Tanggal masa aktif dapat ditentukan secara manual dan bebas diubah kapan saja oleh Admin.
             </span>
             <!-- Quick duration preset chips (opsional untuk kemudahan pengisian cepat) -->
-            <div style="display: flex; gap: 6px; margin-top: 6px; align-items: center;">
+            <div id="masaAktifPresets" style="display: flex; gap: 6px; margin-top: 6px; align-items: center;">
               <span style="font-size: 0.7rem; color: var(--text-muted);">Preset cepat:</span>
               <button type="button" class="btn-preset" onclick="setQuickDuration(30)" style="padding: 3px 8px; font-size: 0.72rem;">+1 Bulan</button>
               <button type="button" class="btn-preset" onclick="setQuickDuration(180)" style="padding: 3px 8px; font-size: 0.72rem;">+6 Bulan</button>
