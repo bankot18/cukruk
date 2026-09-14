@@ -8,6 +8,7 @@
 // Global Application State
 let currentUser = null;
 let currentCategory = "SEKOLAH"; // 'SEKOLAH' atau 'UMUM'
+let currentSubView = "lengkap"; // 'identitas', 'pemeriksaan', 'lengkap'
 let currentPage = 1;
 let pageSize = 25;
 let totalPages = 1;
@@ -479,13 +480,18 @@ async function loadDashboardData() {
       // Update Charts
       updateVisualCharts(data.stats, cachedRecords);
 
-      // Update Badge Counter Sidebar
+      // Update Badge Counter Sidebar & Bank Data Banner
       const badgeSekolah = document.getElementById("badgeCountSekolah");
       const badgeUmum = document.getElementById("badgeCountUmum");
-      if (currentCategory === "SEKOLAH" && badgeSekolah) {
-        badgeSekolah.textContent = data.stats.total || totalRecords;
-      } else if (badgeUmum) {
-        badgeUmum.textContent = data.stats.total || totalRecords;
+      const cpBadgeSekolah = document.getElementById("cpBadgeSekolah");
+      const cpBadgeUmum = document.getElementById("cpBadgeUmum");
+      const currentCount = data.stats ? (data.stats.total || totalRecords) : totalRecords;
+      if (currentCategory === "SEKOLAH") {
+        if (badgeSekolah) badgeSekolah.textContent = currentCount;
+        if (cpBadgeSekolah) cpBadgeSekolah.textContent = currentCount;
+      } else {
+        if (badgeUmum) badgeUmum.textContent = currentCount;
+        if (cpBadgeUmum) cpBadgeUmum.textContent = currentCount;
       }
     } else {
       tbody.innerHTML = `
@@ -560,43 +566,126 @@ function populateSchoolDropdown(schools) {
 // 5. TABLE RENDERING & INTERACTIVE SORTING
 // ==========================================================================
 
+function switchSubView(sub) {
+  currentSubView = sub;
+  document.querySelectorAll(".subview-pill").forEach(p => p.classList.remove("active"));
+  const activeBtn = document.getElementById(
+    sub === "identitas" ? "cpSubIdentitas" : (sub === "pemeriksaan" ? "cpSubPemeriksaan" : "cpSubLengkap")
+  );
+  if (activeBtn) activeBtn.classList.add("active");
+  renderTableHeader();
+  renderTableRows(cachedRecords);
+}
+window.switchSubView = switchSubView;
+
 function renderTableHeader() {
   const headerRow = document.getElementById("tableHeaderRow");
   if (currentCategory === "SEKOLAH") {
-    headerRow.innerHTML = `
-      <tr>
-        <th style="width: 36px;"><input type="checkbox" onchange="toggleSelectAll(this.checked)" title="Pilih Semua"></th>
-        <th>No</th>
-        <th class="sortable" onclick="handleSort('nik')">NIK <i class="fa-solid fa-sort"></i></th>
-        <th class="sortable" onclick="handleSort('nama')">Nama Siswa <i class="fa-solid fa-sort"></i></th>
-        <th class="sortable" onclick="handleSort('sekolah')">Sekolah / Kelas</th>
-        <th>IMT (Status Gizi)</th>
-        <th>Tekanan Darah</th>
-        <th>Gula / HB</th>
-        <th>Karies Gigi</th>
-        <th>Status Entry</th>
-        <th>Waktu</th>
-        <th style="text-align: right;">Aksi</th>
-      </tr>
-    `;
+    if (currentSubView === "identitas") {
+      headerRow.innerHTML = `
+        <tr>
+          <th style="width: 36px;"><input type="checkbox" onchange="toggleSelectAll(this.checked)" title="Pilih Semua"></th>
+          <th>No</th>
+          <th class="sortable" onclick="handleSort('nik')">NIK <i class="fa-solid fa-sort"></i></th>
+          <th class="sortable" onclick="handleSort('nama')">Nama Siswa <i class="fa-solid fa-sort"></i></th>
+          <th>JK / Usia</th>
+          <th>Tanggal Lahir</th>
+          <th class="sortable" onclick="handleSort('sekolah')">Sekolah</th>
+          <th>Kelas</th>
+          <th>Status Entry</th>
+          <th>Waktu</th>
+          <th style="text-align: right;">Aksi</th>
+        </tr>
+      `;
+    } else if (currentSubView === "pemeriksaan") {
+      headerRow.innerHTML = `
+        <tr>
+          <th style="width: 36px;"><input type="checkbox" onchange="toggleSelectAll(this.checked)" title="Pilih Semua"></th>
+          <th>No</th>
+          <th class="sortable" onclick="handleSort('nik')">NIK <i class="fa-solid fa-sort"></i></th>
+          <th class="sortable" onclick="handleSort('nama')">Nama Siswa <i class="fa-solid fa-sort"></i></th>
+          <th>TB / BB (IMT)</th>
+          <th>Tekanan Darah</th>
+          <th>Lab HB (Anemia)</th>
+          <th>Karies Gigi</th>
+          <th>Kacamata</th>
+          <th>Status Entry</th>
+          <th>Waktu</th>
+          <th style="text-align: right;">Aksi</th>
+        </tr>
+      `;
+    } else {
+      headerRow.innerHTML = `
+        <tr>
+          <th style="width: 36px;"><input type="checkbox" onchange="toggleSelectAll(this.checked)" title="Pilih Semua"></th>
+          <th>No</th>
+          <th class="sortable" onclick="handleSort('nik')">NIK <i class="fa-solid fa-sort"></i></th>
+          <th class="sortable" onclick="handleSort('nama')">Nama Siswa <i class="fa-solid fa-sort"></i></th>
+          <th class="sortable" onclick="handleSort('sekolah')">Sekolah / Kelas</th>
+          <th>IMT (Status Gizi)</th>
+          <th>Tekanan Darah</th>
+          <th>Gula / HB</th>
+          <th>Karies Gigi</th>
+          <th>Status Entry</th>
+          <th>Waktu</th>
+          <th style="text-align: right;">Aksi</th>
+        </tr>
+      `;
+    }
   } else {
-    headerRow.innerHTML = `
-      <tr>
-        <th style="width: 36px;"><input type="checkbox" onchange="toggleSelectAll(this.checked)" title="Pilih Semua"></th>
-        <th>No</th>
-        <th class="sortable" onclick="handleSort('nik')">NIK <i class="fa-solid fa-sort"></i></th>
-        <th class="sortable" onclick="handleSort('nama')">Nama Pasien <i class="fa-solid fa-sort"></i></th>
-        <th>JK / Usia</th>
-        <th>Alamat / HP</th>
-        <th>IMT (Status Gizi)</th>
-        <th>Tekanan Darah</th>
-        <th>Gula Darah</th>
-        <th>Merokok / CO</th>
-        <th>Status Entry</th>
-        <th>Waktu</th>
-        <th style="text-align: right;">Aksi</th>
-      </tr>
-    `;
+    // KATEGORI UMUM
+    if (currentSubView === "identitas") {
+      headerRow.innerHTML = `
+        <tr>
+          <th style="width: 36px;"><input type="checkbox" onchange="toggleSelectAll(this.checked)" title="Pilih Semua"></th>
+          <th>No</th>
+          <th class="sortable" onclick="handleSort('nik')">NIK <i class="fa-solid fa-sort"></i></th>
+          <th class="sortable" onclick="handleSort('nama')">Nama Pasien <i class="fa-solid fa-sort"></i></th>
+          <th>JK / Usia</th>
+          <th>Tanggal Lahir</th>
+          <th>Alamat Domisili</th>
+          <th>No. Handphone</th>
+          <th>Status Entry</th>
+          <th>Waktu</th>
+          <th style="text-align: right;">Aksi</th>
+        </tr>
+      `;
+    } else if (currentSubView === "pemeriksaan") {
+      headerRow.innerHTML = `
+        <tr>
+          <th style="width: 36px;"><input type="checkbox" onchange="toggleSelectAll(this.checked)" title="Pilih Semua"></th>
+          <th>No</th>
+          <th class="sortable" onclick="handleSort('nik')">NIK <i class="fa-solid fa-sort"></i></th>
+          <th class="sortable" onclick="handleSort('nama')">Nama Pasien <i class="fa-solid fa-sort"></i></th>
+          <th>TB / BB (IMT)</th>
+          <th>Tekanan Darah</th>
+          <th>Gula Darah</th>
+          <th>Lingkar Perut</th>
+          <th>Merokok / CO</th>
+          <th>Status Entry</th>
+          <th>Waktu</th>
+          <th style="text-align: right;">Aksi</th>
+        </tr>
+      `;
+    } else {
+      headerRow.innerHTML = `
+        <tr>
+          <th style="width: 36px;"><input type="checkbox" onchange="toggleSelectAll(this.checked)" title="Pilih Semua"></th>
+          <th>No</th>
+          <th class="sortable" onclick="handleSort('nik')">NIK <i class="fa-solid fa-sort"></i></th>
+          <th class="sortable" onclick="handleSort('nama')">Nama Pasien <i class="fa-solid fa-sort"></i></th>
+          <th>JK / Usia</th>
+          <th>Alamat / HP</th>
+          <th>IMT (Status Gizi)</th>
+          <th>Tekanan Darah</th>
+          <th>Gula Darah</th>
+          <th>Merokok / CO</th>
+          <th>Status Entry</th>
+          <th>Waktu</th>
+          <th style="text-align: right;">Aksi</th>
+        </tr>
+      `;
+    }
   }
 }
 
@@ -637,70 +726,135 @@ function renderTableRows(records) {
 
     const rowNum = (currentPage - 1) * pageSize + (idx + 1);
     const isChecked = selectedNiks.has(r.nik) ? "checked" : "";
+    const jkText = r.jenis_kelamin ? (r.jenis_kelamin === 'L' ? 'L' : 'P') : '-';
+    const usiaText = r.umur ? `${r.umur} th` : '-';
+
+    const actionButtons = `
+      <td style="text-align: right;">
+        <div class="row-actions-group" style="justify-content: flex-end;">
+          <button class="btn-row-action" onclick="openPatientDrawer('${r.nik}')" title="Buka Detail Rekam Medis 360">
+            <i class="fa-solid fa-eye"></i>
+          </button>
+          <button class="btn-row-action" onclick="openEditRecordModal('${r.nik}')" title="Edit Data Pasien">
+            <i class="fa-solid fa-pen"></i>
+          </button>
+          <button class="btn-row-action delete" onclick="handleDeleteSingle('${r.nik}')" title="Hapus Data">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </div>
+      </td>
+    `;
 
     if (currentCategory === "SEKOLAH") {
-      const hbHtml = r.hb ? (r.hb < 12 ? `<span style="color:#fb7185; font-weight:700;">HB: ${r.hb}</span>` : `HB: ${r.hb}`) : "";
+      const hbHtml = r.hb ? (r.hb < 12 ? `<span style="color:#fb7185; font-weight:700;">HB: ${r.hb}</span>` : `HB: ${r.hb}`) : "-";
       const gulaHtml = r.gula_darah ? `GDS: ${r.gula_darah}` : "";
-      const labInfo = [gulaHtml, hbHtml].filter(Boolean).join(" | ") || "-";
+      const labInfo = [gulaHtml, r.hb ? `HB: ${r.hb}` : ""].filter(Boolean).join(" | ") || "-";
 
-      return `
-        <tr>
-          <td><input type="checkbox" ${isChecked} onchange="toggleSelectRow('${r.nik}', this.checked)"></td>
-          <td style="color: var(--text-muted); font-size: 0.75rem;">${rowNum}</td>
-          <td class="col-nik">${r.nik}</td>
-          <td class="col-name" onclick="openPatientDrawer('${r.nik}')">${r.nama || "-"}</td>
-          <td>${r.sekolah || "-"} <span style="font-size: 0.72rem; color: var(--text-muted);">(${r.kelas || "-"})</span></td>
-          <td>${imtHtml}</td>
-          <td>${bpHtml}</td>
-          <td>${labInfo}</td>
-          <td>${r.karies || "-"}</td>
-          <td>${statusBadge}</td>
-          <td style="font-size: 0.72rem; color: var(--text-muted);">${waktuStr}</td>
-          <td style="text-align: right;">
-            <div class="row-actions-group" style="justify-content: flex-end;">
-              <button class="btn-row-action" onclick="openPatientDrawer('${r.nik}')" title="Buka Detail Rekam Medis 360">
-                <i class="fa-solid fa-eye"></i>
-              </button>
-              <button class="btn-row-action" onclick="openEditRecordModal('${r.nik}')" title="Edit Data Pasien">
-                <i class="fa-solid fa-pen"></i>
-              </button>
-              <button class="btn-row-action delete" onclick="handleDeleteSingle('${r.nik}')" title="Hapus Data">
-                <i class="fa-solid fa-trash"></i>
-              </button>
-            </div>
-          </td>
-        </tr>
-      `;
+      if (currentSubView === "identitas") {
+        return `
+          <tr>
+            <td><input type="checkbox" ${isChecked} onchange="toggleSelectRow('${r.nik}', this.checked)"></td>
+            <td style="color: var(--text-muted); font-size: 0.75rem;">${rowNum}</td>
+            <td class="col-nik">${r.nik}</td>
+            <td class="col-name" onclick="openPatientDrawer('${r.nik}')">${r.nama || "-"}</td>
+            <td>${jkText} / ${usiaText}</td>
+            <td>${r.tanggal_lahir || "-"}</td>
+            <td>${r.sekolah || "-"}</td>
+            <td>${r.kelas || "-"}</td>
+            <td>${statusBadge}</td>
+            <td style="font-size: 0.72rem; color: var(--text-muted);">${waktuStr}</td>
+            ${actionButtons}
+          </tr>
+        `;
+      } else if (currentSubView === "pemeriksaan") {
+        return `
+          <tr>
+            <td><input type="checkbox" ${isChecked} onchange="toggleSelectRow('${r.nik}', this.checked)"></td>
+            <td style="color: var(--text-muted); font-size: 0.75rem;">${rowNum}</td>
+            <td class="col-nik">${r.nik}</td>
+            <td class="col-name" onclick="openPatientDrawer('${r.nik}')">${r.nama || "-"}</td>
+            <td>${imtHtml}</td>
+            <td>${bpHtml}</td>
+            <td>${hbHtml}</td>
+            <td>${r.karies || "-"}</td>
+            <td>${r.kacamata || "Tidak"}</td>
+            <td>${statusBadge}</td>
+            <td style="font-size: 0.72rem; color: var(--text-muted);">${waktuStr}</td>
+            ${actionButtons}
+          </tr>
+        `;
+      } else {
+        return `
+          <tr>
+            <td><input type="checkbox" ${isChecked} onchange="toggleSelectRow('${r.nik}', this.checked)"></td>
+            <td style="color: var(--text-muted); font-size: 0.75rem;">${rowNum}</td>
+            <td class="col-nik">${r.nik}</td>
+            <td class="col-name" onclick="openPatientDrawer('${r.nik}')">${r.nama || "-"}</td>
+            <td>${r.sekolah || "-"} <span style="font-size: 0.72rem; color: var(--text-muted);">(${r.kelas || "-"})</span></td>
+            <td>${imtHtml}</td>
+            <td>${bpHtml}</td>
+            <td>${labInfo}</td>
+            <td>${r.karies || "-"}</td>
+            <td>${statusBadge}</td>
+            <td style="font-size: 0.72rem; color: var(--text-muted);">${waktuStr}</td>
+            ${actionButtons}
+          </tr>
+        `;
+      }
     } else {
-      return `
-        <tr>
-          <td><input type="checkbox" ${isChecked} onchange="toggleSelectRow('${r.nik}', this.checked)"></td>
-          <td style="color: var(--text-muted); font-size: 0.75rem;">${rowNum}</td>
-          <td class="col-nik">${r.nik}</td>
-          <td class="col-name" onclick="openPatientDrawer('${r.nik}')">${r.nama || "-"}</td>
-          <td>${r.jenis_kelamin || "-"} / ${r.umur || "-"} th</td>
-          <td>${r.alamat || "-"} <span style="font-size: 0.72rem; color: var(--text-muted);">(${r.no_hp || "-"})</span></td>
-          <td>${imtHtml}</td>
-          <td>${bpHtml}</td>
-          <td>${r.gula_darah ? `GDS: ${r.gula_darah} mg/dL` : "-"}</td>
-          <td>${r.merokok ? `Rokok: ${r.merokok}` : "-"}</td>
-          <td>${statusBadge}</td>
-          <td style="font-size: 0.72rem; color: var(--text-muted);">${waktuStr}</td>
-          <td style="text-align: right;">
-            <div class="row-actions-group" style="justify-content: flex-end;">
-              <button class="btn-row-action" onclick="openPatientDrawer('${r.nik}')" title="Buka Detail Rekam Medis 360">
-                <i class="fa-solid fa-eye"></i>
-              </button>
-              <button class="btn-row-action" onclick="openEditRecordModal('${r.nik}')" title="Edit Data Pasien">
-                <i class="fa-solid fa-pen"></i>
-              </button>
-              <button class="btn-row-action delete" onclick="handleDeleteSingle('${r.nik}')" title="Hapus Data">
-                <i class="fa-solid fa-trash"></i>
-              </button>
-            </div>
-          </td>
-        </tr>
-      `;
+      // UMUM
+      if (currentSubView === "identitas") {
+        return `
+          <tr>
+            <td><input type="checkbox" ${isChecked} onchange="toggleSelectRow('${r.nik}', this.checked)"></td>
+            <td style="color: var(--text-muted); font-size: 0.75rem;">${rowNum}</td>
+            <td class="col-nik">${r.nik}</td>
+            <td class="col-name" onclick="openPatientDrawer('${r.nik}')">${r.nama || "-"}</td>
+            <td>${jkText} / ${usiaText}</td>
+            <td>${r.tanggal_lahir || "-"}</td>
+            <td>${r.alamat || "-"}</td>
+            <td>${r.no_hp || "-"}</td>
+            <td>${statusBadge}</td>
+            <td style="font-size: 0.72rem; color: var(--text-muted);">${waktuStr}</td>
+            ${actionButtons}
+          </tr>
+        `;
+      } else if (currentSubView === "pemeriksaan") {
+        return `
+          <tr>
+            <td><input type="checkbox" ${isChecked} onchange="toggleSelectRow('${r.nik}', this.checked)"></td>
+            <td style="color: var(--text-muted); font-size: 0.75rem;">${rowNum}</td>
+            <td class="col-nik">${r.nik}</td>
+            <td class="col-name" onclick="openPatientDrawer('${r.nik}')">${r.nama || "-"}</td>
+            <td>${imtHtml}</td>
+            <td>${bpHtml}</td>
+            <td>${r.gula_darah ? `GDS: ${r.gula_darah} mg/dL` : "-"}</td>
+            <td>${r.lp ? `${r.lp} cm` : "-"}</td>
+            <td>${r.merokok ? `${r.merokok} (${r.kadar_co || 0} ppm)` : "-"}</td>
+            <td>${statusBadge}</td>
+            <td style="font-size: 0.72rem; color: var(--text-muted);">${waktuStr}</td>
+            ${actionButtons}
+          </tr>
+        `;
+      } else {
+        return `
+          <tr>
+            <td><input type="checkbox" ${isChecked} onchange="toggleSelectRow('${r.nik}', this.checked)"></td>
+            <td style="color: var(--text-muted); font-size: 0.75rem;">${rowNum}</td>
+            <td class="col-nik">${r.nik}</td>
+            <td class="col-name" onclick="openPatientDrawer('${r.nik}')">${r.nama || "-"}</td>
+            <td>${jkText} / ${usiaText}</td>
+            <td>${r.alamat || "-"} <span style="font-size: 0.72rem; color: var(--text-muted);">(${r.no_hp || "-"})</span></td>
+            <td>${imtHtml}</td>
+            <td>${bpHtml}</td>
+            <td>${r.gula_darah ? `GDS: ${r.gula_darah} mg/dL` : "-"}</td>
+            <td>${r.merokok ? `Rokok: ${r.merokok}` : "-"}</td>
+            <td>${statusBadge}</td>
+            <td style="font-size: 0.72rem; color: var(--text-muted);">${waktuStr}</td>
+            ${actionButtons}
+          </tr>
+        `;
+      }
     }
   }).join("");
 }
@@ -804,20 +958,26 @@ function switchCategory(cat) {
   const navSekolah = document.getElementById("navSekolah");
   const navUmum = document.getElementById("navUmum");
   const schFilter = document.getElementById("filterSekolah");
+  const cpCatSekolah = document.getElementById("cpCatSekolah");
+  const cpCatUmum = document.getElementById("cpCatUmum");
 
   if (cat === "SEKOLAH") {
-    segSekolah.classList.add("active");
-    segUmum.classList.remove("active");
-    navSekolah.classList.add("active");
-    navUmum.classList.remove("active");
+    if (segSekolah) segSekolah.classList.add("active");
+    if (segUmum) segUmum.classList.remove("active");
+    if (navSekolah) navSekolah.classList.add("active");
+    if (navUmum) navUmum.classList.remove("active");
+    if (cpCatSekolah) cpCatSekolah.classList.add("active");
+    if (cpCatUmum) cpCatUmum.classList.remove("active");
     document.getElementById("pageTitleIcon").textContent = "🏫";
     document.getElementById("pageTitleText").textContent = "Skrining Anak Sekolah (UKS)";
     if (schFilter) schFilter.style.display = "inline-block";
   } else {
-    segUmum.classList.add("active");
-    segSekolah.classList.remove("active");
-    navUmum.classList.add("active");
-    navSekolah.classList.remove("active");
+    if (segUmum) segUmum.classList.add("active");
+    if (segSekolah) segSekolah.classList.remove("active");
+    if (navUmum) navUmum.classList.add("active");
+    if (navSekolah) navSekolah.classList.remove("active");
+    if (cpCatUmum) cpCatUmum.classList.add("active");
+    if (cpCatSekolah) cpCatSekolah.classList.remove("active");
     document.getElementById("pageTitleIcon").textContent = "👥";
     document.getElementById("pageTitleText").textContent = "Skrining Warga / Posbindu PTM";
     if (schFilter) schFilter.style.display = "none";
@@ -932,15 +1092,21 @@ function deleteFromDrawer() {
 // ==========================================================================
 
 function openAddPatientModal() {
-  document.getElementById("editModalTitle").textContent = `Tambah Pasien Baru (${currentCategory})`;
+  document.getElementById("editModalTitle").textContent = `Tambah Pasien Baru (${currentCategory === "SEKOLAH" ? "Siswa UKS" : "Warga PTM"})`;
   document.getElementById("formActionType").value = "ADD";
   document.getElementById("recordForm").reset();
   document.getElementById("formNik").readOnly = false;
 
+  const isSekolah = currentCategory === "SEKOLAH";
   const schoolFields = document.getElementById("formSchoolFields");
-  if (schoolFields) {
-    schoolFields.style.display = currentCategory === "SEKOLAH" ? "grid" : "none";
-  }
+  const schoolExamFields = document.getElementById("formSchoolExamFields");
+  const umumFields = document.getElementById("formUmumFields");
+  const umumExamFields = document.getElementById("formUmumExamFields");
+
+  if (schoolFields) schoolFields.style.display = isSekolah ? "grid" : "none";
+  if (schoolExamFields) schoolExamFields.style.display = isSekolah ? "block" : "none";
+  if (umumFields) umumFields.style.display = isSekolah ? "none" : "grid";
+  if (umumExamFields) umumExamFields.style.display = isSekolah ? "none" : "block";
 
   document.getElementById("editRecordModal").classList.add("show");
 }
@@ -949,13 +1115,34 @@ function openEditRecordModal(nik) {
   const patient = cachedRecords.find(r => r.nik === nik);
   if (!patient) return;
 
-  document.getElementById("editModalTitle").textContent = `Edit Rekam Pasien: ${patient.nama}`;
+  const isSekolah = (patient.category || currentCategory) === "SEKOLAH";
+  document.getElementById("editModalTitle").textContent = `Edit Rekam Pasien: ${patient.nama || patient.nik}`;
   document.getElementById("formActionType").value = "EDIT";
-  document.getElementById("formNik").value = patient.nik;
+  document.getElementById("formNik").value = patient.nik || "";
   document.getElementById("formNik").readOnly = true;
   document.getElementById("formNama").value = patient.nama || "";
+  document.getElementById("formJenisKelamin").value = patient.jenis_kelamin || "L";
+  document.getElementById("formTanggalLahir").value = patient.tanggal_lahir || "";
+  document.getElementById("formUmur").value = patient.umur || "";
+
+  // Sekolah fields
   document.getElementById("formSekolah").value = patient.sekolah || "";
   document.getElementById("formKelas").value = patient.kelas || "";
+  document.getElementById("formHb").value = patient.hb || "";
+  document.getElementById("formKaries").value = patient.karies || "";
+  document.getElementById("formKacamata").value = patient.kacamata || "Tidak";
+  document.getElementById("formMenstruasi").value = patient.menstruasi || "";
+  document.getElementById("formKebugaran").value = patient.kebugaran || "Baik";
+
+  // Umum fields
+  document.getElementById("formNoHp").value = patient.no_hp || "";
+  document.getElementById("formAlamat").value = patient.alamat || "";
+  document.getElementById("formMerokok").value = patient.merokok || "Tidak";
+  document.getElementById("formKadarCo").value = patient.kadar_co || "";
+  document.getElementById("formKatarak").value = patient.katarak || "Normal";
+  document.getElementById("formTelinga").value = patient.telinga || "Normal";
+
+  // Vitals
   document.getElementById("formBb").value = patient.bb || "";
   document.getElementById("formTb").value = patient.tb || "";
   document.getElementById("formLp").value = patient.lp || "";
@@ -964,9 +1151,14 @@ function openEditRecordModal(nik) {
   document.getElementById("formGula").value = patient.gula_darah || "";
 
   const schoolFields = document.getElementById("formSchoolFields");
-  if (schoolFields) {
-    schoolFields.style.display = currentCategory === "SEKOLAH" ? "grid" : "none";
-  }
+  const schoolExamFields = document.getElementById("formSchoolExamFields");
+  const umumFields = document.getElementById("formUmumFields");
+  const umumExamFields = document.getElementById("formUmumExamFields");
+
+  if (schoolFields) schoolFields.style.display = isSekolah ? "grid" : "none";
+  if (schoolExamFields) schoolExamFields.style.display = isSekolah ? "block" : "none";
+  if (umumFields) umumFields.style.display = isSekolah ? "none" : "grid";
+  if (umumExamFields) umumExamFields.style.display = isSekolah ? "none" : "block";
 
   document.getElementById("editRecordModal").classList.add("show");
 }
@@ -980,29 +1172,63 @@ async function handleRecordFormSubmit(event) {
   const actionType = document.getElementById("formActionType").value;
   const nik = document.getElementById("formNik").value.trim();
   const nama = document.getElementById("formNama").value.trim();
-  const sekolah = document.getElementById("formSekolah").value.trim();
-  const kelas = document.getElementById("formKelas").value.trim();
-  const bb = document.getElementById("formBb").value;
-  const tb = document.getElementById("formTb").value;
-  const lp = document.getElementById("formLp").value;
-  const sistol = document.getElementById("formSistol").value;
-  const diastol = document.getElementById("formDiastol").value;
-  const gula = document.getElementById("formGula").value;
+  const jenis_kelamin = document.getElementById("formJenisKelamin").value;
+  const tanggal_lahir = document.getElementById("formTanggalLahir").value || null;
+  const umur = document.getElementById("formUmur").value ? parseInt(document.getElementById("formUmur").value, 10) : null;
+  
+  const sekolah = document.getElementById("formSekolah").value.trim() || null;
+  const kelas = document.getElementById("formKelas").value.trim() || null;
+  const no_hp = document.getElementById("formNoHp").value.trim() || null;
+  const alamat = document.getElementById("formAlamat").value.trim() || null;
 
+  const bb = document.getElementById("formBb").value ? parseFloat(document.getElementById("formBb").value) : null;
+  const tb = document.getElementById("formTb").value ? parseFloat(document.getElementById("formTb").value) : null;
+  const lp = document.getElementById("formLp").value ? parseFloat(document.getElementById("formLp").value) : null;
+  const sistol = document.getElementById("formSistol").value ? parseInt(document.getElementById("formSistol").value, 10) : null;
+  const diastol = document.getElementById("formDiastol").value ? parseInt(document.getElementById("formDiastol").value, 10) : null;
+  const gula = document.getElementById("formGula").value ? parseFloat(document.getElementById("formGula").value) : null;
+
+  const hb = document.getElementById("formHb").value ? parseFloat(document.getElementById("formHb").value) : null;
+  const karies = document.getElementById("formKaries").value.trim() || null;
+  const kacamata = document.getElementById("formKacamata").value || null;
+  const menstruasi = document.getElementById("formMenstruasi").value || null;
+  const kebugaran = document.getElementById("formKebugaran").value || null;
+
+  const merokok = document.getElementById("formMerokok").value || null;
+  const kadar_co = document.getElementById("formKadarCo").value ? parseInt(document.getElementById("formKadarCo").value, 10) : null;
+  const katarak = document.getElementById("formKatarak").value || null;
+  const telinga = document.getElementById("formTelinga").value || null;
+
+  const isSelesai = (bb && sistol);
   const payload = {
     nik,
     category: currentCategory,
     nama,
+    jenis_kelamin,
+    tanggal_lahir,
+    umur,
+    instansi: currentUser?.instansi || "Puskesmas Banjaran Kota",
     sekolah,
     kelas,
+    no_hp,
+    alamat,
     bb,
     tb,
     lp,
     td_sistolik: sistol,
     td_diastolik: diastol,
     gula_darah: gula,
-    petugas: currentUser?.nama || currentUser?.username,
-    status: (bb && sistol) ? "SELESAI_PEMERIKSAAN" : "TERDAFTAR"
+    hb,
+    karies,
+    kacamata,
+    menstruasi,
+    kebugaran,
+    merokok,
+    kadar_co,
+    katarak,
+    telinga,
+    petugas_pendaftaran: currentUser?.nama || currentUser?.username || "Admin",
+    status: isSelesai ? "SELESAI_PEMERIKSAAN" : "TERDAFTAR"
   };
 
   const btn = document.getElementById("btnSaveRecord");
@@ -1018,11 +1244,11 @@ async function handleRecordFormSubmit(event) {
 
     const data = await res.json();
     if (res.ok && data.status === "success") {
-      showToast("Data pasien berhasil disimpan!", "success");
+      showToast("Data pasien berhasil disimpan ke Database Cloud D1!", "success");
       closeEditRecordModal();
       loadDashboardData();
     } else {
-      Swal.fire({ icon: "error", title: "Gagal Menyimpan", text: data.message, background: "#131d31", color: "#fff" });
+      Swal.fire({ icon: "error", title: "Gagal Menyimpan", text: data.message || "Gagal menyimpan", background: "#131d31", color: "#fff" });
     }
   } catch (err) {
     Swal.fire({ icon: "error", title: "Error", text: err.message, background: "#131d31", color: "#fff" });
@@ -2388,12 +2614,18 @@ function showToast(message, type = "info") {
 }
 
 function focusBankData() {
+  document.querySelectorAll(".sidebar-nav-btn").forEach(btn => btn.classList.remove("active"));
+  const navBankData = document.getElementById("navBankData");
+  if (navBankData) navBankData.classList.add("active");
+
   const el = document.getElementById("dataBankSection") || document.getElementById("searchInput");
   if (el) {
     el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.classList.add("highlight-glow");
+    setTimeout(() => el.classList.remove("highlight-glow"), 3000);
     const input = document.getElementById("searchInput");
     if (input) {
-      setTimeout(() => input.focus(), 400);
+      setTimeout(() => input.focus(), 450);
     }
   }
 }

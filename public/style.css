@@ -1802,15 +1802,29 @@ body {
    ════════════════════════════════════════════════════════════════════ */
 .data-bank-banner {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.12) 0%, rgba(15, 23, 42, 0.8) 100%);
+  flex-direction: column;
+  gap: 12px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%);
   border: 1px solid rgba(56, 189, 248, 0.3);
   border-radius: 12px;
   padding: 14px 18px;
   margin-top: 14px;
   margin-bottom: 14px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  transition: all 0.3s ease;
+}
+
+.data-bank-banner.highlight-glow {
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 25px rgba(0, 240, 255, 0.4) !important;
+}
+
+.data-bank-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .data-bank-info {
@@ -1851,5 +1865,96 @@ body {
   align-items: center;
   gap: 8px;
 }
+
+/* Dual Controls Row: Category Switch & Subview Pills */
+.data-bank-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(56, 189, 248, 0.15);
+  flex-wrap: wrap;
+}
+
+.data-bank-cat-switch {
+  display: flex;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+}
+
+.cat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cat-pill:hover {
+  color: #f1f5f9;
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.cat-pill.active {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.25) 0%, rgba(14, 165, 233, 0.2) 100%);
+  color: #00f0ff;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+}
+
+.cat-pill-count {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  background: rgba(0, 0, 0, 0.4);
+  color: #38bdf8;
+}
+
+.data-bank-subviews {
+  display: flex;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+}
+
+.subview-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.subview-pill:hover {
+  color: #f1f5f9;
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.subview-pill.active {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25) 0%, rgba(14, 165, 233, 0.3) 100%);
+  color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+}
+
 
 

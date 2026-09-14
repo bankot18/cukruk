@@ -371,22 +371,67 @@
               <canvas id="bloodPressureChart"></canvas>
             </div>
           </div>
-        <!-- SECTION: BANK DATA PASIEN -->
+        </div>
+
+        <!-- SECTION: BANK DATA PASIEN (IDENTITAS & PEMERIKSAAN) -->
         <div class="data-bank-banner" id="dataBankSection">
-          <div class="data-bank-info">
-            <div class="data-bank-icon-box">
-              <i class="fa-solid fa-database"></i>
+          <div class="data-bank-top-row">
+            <div class="data-bank-info">
+              <div class="data-bank-icon-box">
+                <i class="fa-solid fa-database"></i>
+              </div>
+              <div>
+                <div class="data-bank-title">Bank Data Pasien (Cloudflare D1)</div>
+                <div class="data-bank-desc">Pusat rekam medis pasien &amp; hasil skrining CKG — tersinkronisasi otomatis dengan Bot ENCO</div>
+              </div>
             </div>
-            <div>
-              <div class="data-bank-title">Bank Data Pasien (Cloudflare D1)</div>
-              <div class="data-bank-desc">Pusat rekam medis pasien &amp; hasil skrining CKG — tersinkronisasi otomatis dengan Bot ENCO</div>
+            <div class="data-bank-actions">
+              <button class="btn-action-primary" onclick="openAddPatientModal()" title="Tambah Pasien Baru ke Database Cloud">
+                <i class="fa-solid fa-user-plus"></i>
+                <span>+ Input Pasien</span>
+              </button>
+              <button class="btn-action-outline" onclick="openImportModal()" title="Upload File Excel ke Cloud">
+                <i class="fa-solid fa-file-excel"></i>
+                <span>Import Excel</span>
+              </button>
+              <button class="btn-action-outline" onclick="loadDashboardData()" title="Sinkronkan dengan Database Cloud D1">
+                <i class="fa-solid fa-arrows-rotate"></i>
+                <span>Sync Cloud</span>
+              </button>
             </div>
           </div>
-          <div class="data-bank-actions">
-            <button class="btn-action-outline" onclick="loadDashboardData()" title="Segarkan Bank Data">
-              <i class="fa-solid fa-arrows-rotate"></i>
-              <span>Sync Cloud</span>
-            </button>
+
+          <!-- Dual Controller: Pemisahan Kategori (UMUM vs SEKOLAH) & Sub-View Mode -->
+          <div class="data-bank-controls-row">
+            <!-- 1. Kategori Switcher -->
+            <div class="data-bank-cat-switch">
+              <button class="cat-pill active" id="cpCatSekolah" onclick="switchCategory('SEKOLAH')">
+                <i class="fa-solid fa-school"></i>
+                <span>Siswa (Sekolah)</span>
+                <span class="cat-pill-count" id="cpBadgeSekolah">0</span>
+              </button>
+              <button class="cat-pill" id="cpCatUmum" onclick="switchCategory('UMUM')">
+                <i class="fa-solid fa-users"></i>
+                <span>Warga (Umum / PTM)</span>
+                <span class="cat-pill-count" id="cpBadgeUmum">0</span>
+              </button>
+            </div>
+
+            <!-- 2. Sub-View Switcher (Sama Persis dengan Bot) -->
+            <div class="data-bank-subviews">
+              <button class="subview-pill" id="cpSubIdentitas" onclick="switchSubView('identitas')" title="Tampilkan Kolom Identitas Saja">
+                <i class="fa-solid fa-id-card"></i>
+                <span>🪪 Identitas</span>
+              </button>
+              <button class="subview-pill" id="cpSubPemeriksaan" onclick="switchSubView('pemeriksaan')" title="Tampilkan Kolom Pemeriksaan Klinis Saja">
+                <i class="fa-solid fa-stethoscope"></i>
+                <span>🩺 Pemeriksaan</span>
+              </button>
+              <button class="subview-pill active" id="cpSubLengkap" onclick="switchSubView('lengkap')" title="Tampilkan Rekam Medis Lengkap">
+                <i class="fa-solid fa-file-lines"></i>
+                <span>📑 Lengkap</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -633,56 +678,107 @@
         <button class="btn-drawer-close" onclick="closeEditRecordModal()">&times;</button>
       </div>
       <div class="modal-card-body">
-        <form id="recordForm" onsubmit="handleRecordFormSubmit(event)" style="display: flex; flex-direction: column; gap: 14px;">
+        <form id="recordForm" onsubmit="handleRecordFormSubmit(event)" style="display: flex; flex-direction: column; gap: 14px; max-height: 75vh; overflow-y: auto; padding-right: 4px;">
           <input type="hidden" id="formActionType" value="EDIT">
           
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <!-- SECTION 1: DATA IDENTITAS PASIEN -->
+          <div style="font-weight: 800; font-size: 0.85rem; color: var(--teal-400); display: flex; align-items: center; gap: 6px;">
+            <i class="fa-solid fa-id-card"></i>
+            <span>I. Data Identitas Pasien</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 10px;">
             <div class="input-field">
               <label>NIK (16 Digit)*</label>
               <div class="input-box">
-                <input type="text" id="formNik" maxlength="16" placeholder="3201..." required>
+                <input type="text" id="formNik" maxlength="16" placeholder="3204..." required>
               </div>
             </div>
             <div class="input-field">
-              <label>Nama Lengkap*</label>
+              <label>Nama Lengkap Pasien*</label>
               <div class="input-box">
-                <input type="text" id="formNama" placeholder="Nama Pasien" required>
+                <input type="text" id="formNama" placeholder="Nama Lengkap" required>
               </div>
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;" id="formSchoolFields">
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
             <div class="input-field">
-              <label>Sekolah</label>
+              <label>Jenis Kelamin</label>
               <div class="input-box">
-                <input type="text" id="formSekolah" placeholder="Nama Sekolah">
+                <select id="formJenisKelamin" class="filter-select" style="width: 100%;">
+                  <option value="L">Laki-laki (L)</option>
+                  <option value="P">Perempuan (P)</option>
+                </select>
               </div>
             </div>
             <div class="input-field">
-              <label>Kelas</label>
+              <label>Tanggal Lahir</label>
               <div class="input-box">
-                <input type="text" id="formKelas" placeholder="Misal: VII B">
+                <input type="date" id="formTanggalLahir">
+              </div>
+            </div>
+            <div class="input-field">
+              <label>Usia (Tahun)</label>
+              <div class="input-box">
+                <input type="number" id="formUmur" placeholder="Usia">
               </div>
             </div>
           </div>
 
-          <!-- Pemeriksaan Fisik -->
-          <div style="font-weight: 700; font-size: 0.82rem; color: var(--teal-400); margin-top: 4px;">Pemeriksaan Fisik & Klinis:</div>
+          <!-- Field Identitas Khusus Sekolah -->
+          <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 10px;" id="formSchoolFields">
+            <div class="input-field">
+              <label>Nama Sekolah (UKS)</label>
+              <div class="input-box">
+                <input type="text" id="formSekolah" placeholder="Misal: SDN Banjaran 01">
+              </div>
+            </div>
+            <div class="input-field">
+              <label>Kelas Siswa</label>
+              <div class="input-box">
+                <input type="text" id="formKelas" placeholder="Misal: 4A / 10-IPA">
+              </div>
+            </div>
+          </div>
+
+          <!-- Field Identitas Khusus Umum -->
+          <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 10px;" id="formUmumFields">
+            <div class="input-field">
+              <label>No. Handphone / WA</label>
+              <div class="input-box">
+                <input type="text" id="formNoHp" placeholder="0812...">
+              </div>
+            </div>
+            <div class="input-field">
+              <label>Alamat Domisili</label>
+              <div class="input-box">
+                <input type="text" id="formAlamat" placeholder="Kp. / Desa / RT RW">
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION 2: PEMERIKSAAN FISIK UMUM (BB, TB, LP, Tensi, Gula) -->
+          <div style="font-weight: 800; font-size: 0.85rem; color: #38bdf8; margin-top: 6px; display: flex; align-items: center; gap: 6px;">
+            <i class="fa-solid fa-stethoscope"></i>
+            <span>II. Data Pemeriksaan Fisik &amp; Klinis</span>
+          </div>
+
           <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
             <div class="input-field">
-              <label>Berat (kg)</label>
+              <label>Berat Badan (kg)</label>
               <div class="input-box">
                 <input type="number" step="0.1" id="formBb" placeholder="50.5">
               </div>
             </div>
             <div class="input-field">
-              <label>Tinggi (cm)</label>
+              <label>Tinggi Badan (cm)</label>
               <div class="input-box">
                 <input type="number" step="0.1" id="formTb" placeholder="160">
               </div>
             </div>
             <div class="input-field">
-              <label>Lingkar Perut</label>
+              <label>Lingkar Perut (cm)</label>
               <div class="input-box">
                 <input type="number" step="0.1" id="formLp" placeholder="70">
               </div>
@@ -710,11 +806,106 @@
             </div>
           </div>
 
+          <!-- SECTION 3A: PEMERIKSAAN KHUSUS SEKOLAH -->
+          <div id="formSchoolExamFields">
+            <div style="font-weight: 700; font-size: 0.78rem; color: #fbbf24; margin-bottom: 6px;">Skrining Khusus Siswa Sekolah (UKS):</div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+              <div class="input-field">
+                <label>Hemoglobin HB (g/dL)</label>
+                <div class="input-box">
+                  <input type="number" step="0.1" id="formHb" placeholder="Misal: 12.5">
+                </div>
+              </div>
+              <div class="input-field">
+                <label>Karies Gigi</label>
+                <div class="input-box">
+                  <input type="text" id="formKaries" placeholder="Nihil / 1 Berlubang">
+                </div>
+              </div>
+              <div class="input-field">
+                <label>Kacamata</label>
+                <div class="input-box">
+                  <select id="formKacamata" class="filter-select" style="width: 100%;">
+                    <option value="Tidak">Tidak</option>
+                    <option value="Ya">Ya (Miopia)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
+              <div class="input-field">
+                <label>Status Menstruasi (Siswi)</label>
+                <div class="input-box">
+                  <select id="formMenstruasi" class="filter-select" style="width: 100%;">
+                    <option value="">-</option>
+                    <option value="Teratur">Teratur</option>
+                    <option value="Tidak Teratur">Tidak Teratur</option>
+                    <option value="Belum">Belum Menstruasi</option>
+                  </select>
+                </div>
+              </div>
+              <div class="input-field">
+                <label>Kebugaran Jasmani</label>
+                <div class="input-box">
+                  <select id="formKebugaran" class="filter-select" style="width: 100%;">
+                    <option value="Baik">Baik</option>
+                    <option value="Cukup">Cukup</option>
+                    <option value="Kurang">Kurang</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION 3B: PEMERIKSAAN KHUSUS WARGA UMUM / PTM -->
+          <div id="formUmumExamFields">
+            <div style="font-weight: 700; font-size: 0.78rem; color: #fb7185; margin-bottom: 6px;">Skrining Khusus Warga Umum / PTM:</div>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+              <div class="input-field">
+                <label>Riwayat Merokok</label>
+                <div class="input-box">
+                  <select id="formMerokok" class="filter-select" style="width: 100%;">
+                    <option value="Tidak">Tidak</option>
+                    <option value="Ya">Ya (Aktif)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="input-field">
+                <label>Kadar CO (ppm)</label>
+                <div class="input-box">
+                  <input type="number" id="formKadarCo" placeholder="0">
+                </div>
+              </div>
+              <div class="input-field">
+                <label>Katarak / Mata</label>
+                <div class="input-box">
+                  <select id="formKatarak" class="filter-select" style="width: 100%;">
+                    <option value="Normal">Normal</option>
+                    <option value="Mata Kiri Keruh">Mata Kiri Keruh</option>
+                    <option value="Mata Kanan Keruh">Mata Kanan Keruh</option>
+                    <option value="Kedua Mata Keruh">Kedua Mata Keruh</option>
+                  </select>
+                </div>
+              </div>
+              <div class="input-field">
+                <label>Telinga</label>
+                <div class="input-box">
+                  <select id="formTelinga" class="filter-select" style="width: 100%;">
+                    <option value="Normal">Normal</option>
+                    <option value="Serumen Kanan">Serumen Kanan</option>
+                    <option value="Serumen Kiri">Serumen Kiri</option>
+                    <option value="Infeksi">Infeksi</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
             <button type="button" class="btn-action-outline" onclick="closeEditRecordModal()">Batal</button>
             <button type="submit" class="btn-action-primary" id="btnSaveRecord">
               <i class="fa-solid fa-floppy-disk"></i>
-              <span>Simpan Perubahan</span>
+              <span>Simpan ke Database Cloud D1</span>
             </button>
           </div>
         </form>
