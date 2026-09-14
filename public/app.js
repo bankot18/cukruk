@@ -151,6 +151,12 @@ function setupUserSession(user) {
     if (adminSection) adminSection.style.display = "none";
   }
 
+  // Render Instansi / Puskesmas di Topbar
+  const faskesBadge = document.getElementById("faskesNameDisplay");
+  if (faskesBadge) {
+    faskesBadge.textContent = user.instansi || "Puskesmas";
+  }
+
   // Inisialisasi Charts & Muat Data
   initCharts();
   loadDashboardData();
@@ -421,6 +427,13 @@ async function loadDashboardData() {
   if (currentFilterStatus) params.append("status", currentFilterStatus);
   if (currentFilterSekolah && currentCategory === "SEKOLAH") params.append("sekolah", currentFilterSekolah);
   if (currentFilterRisk) params.append("risk", currentFilterRisk);
+
+  // Filter isolasi Puskesmas
+  if (currentUser?.instansi && currentUser.role !== "super_admin") {
+    params.append("instansi", currentUser.instansi);
+  } else if (currentUser?.role === "super_admin" && window.currentFilterInstansi && window.currentFilterInstansi !== "ALL") {
+    params.append("instansi", window.currentFilterInstansi);
+  }
 
   try {
     const res = await fetch(`/api/records?${params.toString()}`);
@@ -1103,6 +1116,10 @@ async function handleBulkDelete() {
 
 function openImportModal() {
   parsedImportData = [];
+  const instansiEl = document.getElementById("importModalInstansi");
+  if (instansiEl) {
+    instansiEl.textContent = currentUser?.instansi || "Puskesmas";
+  }
   document.getElementById("importPreviewBox").style.display = "none";
   document.getElementById("excelDropzone").style.display = "flex";
   document.getElementById("importModal").classList.add("show");
@@ -1131,29 +1148,45 @@ function setupDropzoneEvents() {
   });
 
   dropzone.addEventListener("drop", (e) => {
-    const dt = e.dataTransfer;
-    const files = dt.files;
-    handleExcelFileSelect(files);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleExcelFileSelect(files);
+    }
   });
 }
 
 function handleExcelFileSelect(files) {
   if (!files || files.length === 0) return;
   const file = files[0];
-  const reader = new FileReader();
+  const ext = file.name.split(".").pop().toLowerCase();
 
-  showToast(`Membaca file ${file.name}...`, "info");
+  if (!["xlsx", "xls", "csv"].includes(ext)) {
+    Swal.fire({
+      icon: "error",
+      title: "Format Tidak Didukung",
+      text: "Harap unggah file spreadsheet berekstensi .xlsx, .xls, atau .csv",
+      background: "#131d31",
+      color: "#fff"
+    });
+    return;
+  }
+
+  parseExcelFile(file);
+}
+
+function parseExcelFile(file) {
+  const reader = new FileReader();
 
   reader.onload = (e) => {
     try {
       const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: "array" });
-      const firstSheet = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[firstSheet];
-      const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      const workbook = XLSX.read(data, { type: "array", raw: false });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
       if (!rawRows || rawRows.length === 0) {
-        Swal.fire({ icon: "error", title: "File Kosong", text: "Sheet pertama tidak memiliki baris data!", background: "#131d31", color: "#fff" });
+        Swal.fire({ icon: "warning", title: "File Kosong", text: "Tidak ada baris data yang terdeteksi dalam file ini.", background: "#131d31", color: "#fff" });
         return;
       }
 
@@ -1166,12 +1199,24 @@ function handleExcelFileSelect(files) {
         let nikVal = "";
         let namaVal = "";
         let tglLahirVal = "";
+        let jkVal = null;
         let sekolahVal = "";
         let kelasVal = "";
+        let noHpVal = null;
+        let alamatVal = null;
+
         let bbVal = null;
         let tbVal = null;
+        let lpVal = null;
         let sistolVal = null;
         let diastolVal = null;
+        let gulaVal = null;
+        let hbVal = null;
+        let kariesVal = null;
+        let kacamataVal = null;
+        let menstruasiVal = null;
+        let kebugaranVal = null;
+        let merokokVal = null;
 
         // Iterasi keys untuk mapping cerdas
         for (const k of Object.keys(row)) {
@@ -1181,12 +1226,25 @@ function handleExcelFileSelect(files) {
           if (!nikVal && (lk.includes("nik") || lk.includes("ktp") || lk.includes("identitas") || lk.includes("noktp"))) nikVal = v;
           else if (!namaVal && (lk.includes("nama") || lk.includes("siswa") || lk.includes("peserta") || lk.includes("pasien"))) namaVal = v;
           else if (!tglLahirVal && (lk.includes("tgllahir") || lk.includes("tanggallahir") || lk.includes("tgl"))) tglLahirVal = v;
-          else if (!sekolahVal && (lk.includes("sekolah") || lk.includes("instansi") || lk.includes("unit"))) sekolahVal = v;
+          else if (!jkVal && (lk.includes("kelamin") || lk === "jk" || lk.includes("sex") || lk.includes("gender"))) jkVal = v;
+          else if (!sekolahVal && (lk.includes("sekolah") || lk.includes("unit"))) sekolahVal = v;
           else if (!kelasVal && lk.includes("kelas")) kelasVal = v;
-          else if (bbVal === null && (lk === "bb" || lk.includes("berat"))) bbVal = v ? parseFloat(v) : null;
-          else if (tbVal === null && (lk === "tb" || lk.includes("tinggi"))) tbVal = v ? parseFloat(v) : null;
+          else if (!noHpVal && (lk.includes("hp") || lk.includes("wa") || lk.includes("telepon") || lk.includes("whatsapp"))) noHpVal = v;
+          else if (!alamatVal && (lk.includes("alamat") || lk.includes("desa") || lk.includes("domisili"))) alamatVal = v;
+          
+          // Pengukuran Fisik & Klinis
+          else if (bbVal === null && (lk === "bb" || lk.includes("berat"))) bbVal = v ? parseFloat(v.replace(",", ".")) : null;
+          else if (tbVal === null && (lk === "tb" || lk.includes("tinggi"))) tbVal = v ? parseFloat(v.replace(",", ".")) : null;
+          else if (lpVal === null && (lk === "lp" || lk.includes("perut") || lk.includes("lingkar"))) lpVal = v ? parseFloat(v.replace(",", ".")) : null;
           else if (sistolVal === null && (lk.includes("sistol") || lk === "tds")) sistolVal = v ? parseInt(v, 10) : null;
           else if (diastolVal === null && (lk.includes("diastol") || lk === "tdd")) diastolVal = v ? parseInt(v, 10) : null;
+          else if (gulaVal === null && (lk.includes("gula") || lk.includes("gds"))) gulaVal = v ? parseInt(v, 10) : null;
+          else if (hbVal === null && (lk === "hb" || lk.includes("hemo"))) hbVal = v ? parseFloat(v.replace(",", ".")) : null;
+          else if (!kariesVal && (lk.includes("gigi") || lk.includes("karies"))) kariesVal = v;
+          else if (!kacamataVal && lk.includes("kacamata")) kacamataVal = v;
+          else if (!menstruasiVal && lk.includes("menstruasi")) menstruasiVal = v;
+          else if (!kebugaranVal && lk.includes("kebugaran")) kebugaranVal = v;
+          else if (!merokokVal && lk.includes("rokok")) merokokVal = v;
         }
 
         // Sanitasi NIK (Hilangkan format scientific 3.2E+15 jika ada)
@@ -1198,12 +1256,24 @@ function handleExcelFileSelect(files) {
             category: targetCat,
             nama: namaVal || "Tanpa Nama",
             tanggal_lahir: tglLahirVal,
+            jenis_kelamin: jkVal,
+            instansi: currentUser?.instansi || "Puskesmas",
             sekolah: sekolahVal,
             kelas: kelasVal,
+            no_hp: noHpVal,
+            alamat: alamatVal,
             bb: bbVal,
             tb: tbVal,
+            lp: lpVal,
             td_sistolik: sistolVal,
             td_diastolik: diastolVal,
+            gula_darah: gulaVal,
+            hb: hbVal,
+            karies: kariesVal,
+            kacamata: kacamataVal,
+            menstruasi: menstruasiVal,
+            kebugaran: kebugaranVal,
+            merokok: merokokVal,
             petugas: currentUser?.nama || currentUser?.username
           });
         } else {
@@ -1228,7 +1298,7 @@ function handleExcelFileSelect(files) {
       document.getElementById("importPreviewBox").style.display = "block";
       document.getElementById("excelDropzone").style.display = "none";
     } catch (err) {
-      Swal.fire({ icon: "error", title: "Gagal Parsing Excel", text: err.message, background: "#131d31", color: "#fff" });
+      Swal.fire({ icon: "error", title: "Gagal Parsing File", text: err.message, background: "#131d31", color: "#fff" });
     }
   };
 
@@ -1245,7 +1315,10 @@ async function executeImport() {
     const res = await fetch("/api/records", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bulk: parsedImportData })
+      body: JSON.stringify({
+        instansi: currentUser?.instansi || "Puskesmas",
+        bulk: parsedImportData
+      })
     });
 
     const data = await res.json();
@@ -1253,7 +1326,7 @@ async function executeImport() {
       Swal.fire({
         icon: "success",
         title: "Import Berhasil!",
-        text: `${data.successCount} rekam data pasien berhasil disimpan ke Cloudflare D1.`,
+        text: `${data.successCount} rekam data pasien berhasil disimpan ke Bank Data ${currentUser?.instansi || 'Puskesmas'}.`,
         background: "#131d31",
         color: "#fff",
         confirmButtonColor: "#0d9488"
@@ -1750,7 +1823,7 @@ function applyUserFilters() {
 // SUB-MODAL: FORM PENDAFTARAN & EDIT AKUN (6 FIELDS)
 // ==========================================================================
 
-function openAddUserModal() {
+async function openAddUserModal() {
   document.getElementById("userFormMode").value = "ADD";
   document.getElementById("userFormId").value = "";
   document.getElementById("userFormTitle").textContent = "Pendaftaran Akun Baru";
@@ -1764,7 +1837,7 @@ function openAddUserModal() {
 
   // Default role: Puskesmas
   document.getElementById("userRoleSelect").value = "puskesmas";
-  handleRoleSelectionChange("puskesmas");
+  await handleRoleSelectionChange("puskesmas");
 
   // Inisialisasi jenis akun & masa aktif sesuai opsi default
   const defaultJenis = document.getElementById("userJenisAkunSelect").value;
@@ -1773,7 +1846,7 @@ function openAddUserModal() {
   document.getElementById("userFormModal").classList.add("show");
 }
 
-function openEditUserModal(userId) {
+async function openEditUserModal(userId) {
   const user = cachedUsers.find(u => u.id === userId);
   if (!user) return;
 
@@ -1787,8 +1860,9 @@ function openEditUserModal(userId) {
   const roleSelect = document.getElementById("userRoleSelect");
   roleSelect.value = user.role || "puskesmas";
 
-  // 2. Instansi
+  // 2. Instansi Dropdown & Hidden Input
   document.getElementById("userInstansiInput").value = user.instansi || "";
+  await populateInstansiDropdown(user.role || "puskesmas", user.instansi || "");
 
   // 3. Nama Petugas
   document.getElementById("userNamaInput").value = user.nama || "";
@@ -1804,7 +1878,7 @@ function openEditUserModal(userId) {
   document.getElementById("passwordEditHint").style.display = "block";
 
   // 6. Jenis Akun & Masa Aktif
-  handleRoleSelectionChange(user.role);
+  handleRoleSelectionChange(user.role, false);
   const jenisAkunSelect = document.getElementById("userJenisAkunSelect");
   const upperLis = String(user.lisensi || "").toUpperCase();
   if (user.role === "super_admin" || upperLis.includes("LIFETIME")) {
@@ -1830,10 +1904,16 @@ function closeUserFormModal() {
   document.getElementById("userFormModal").classList.remove("show");
 }
 
-function handleRoleSelectionChange(role) {
+async function handleRoleSelectionChange(role, shouldUpdateDropdown = true) {
   const jenisAkunSelect = document.getElementById("userJenisAkunSelect");
   const optLifetime = document.getElementById("optLifetime");
   const fieldMasaAktif = document.getElementById("fieldMasaAktif");
+
+  // Sync Instansi dropdown with selected role
+  if (shouldUpdateDropdown) {
+    const curInstansi = document.getElementById("userInstansiInput").value;
+    await populateInstansiDropdown(role, curInstansi);
+  }
 
   if (role === "super_admin") {
     optLifetime.disabled = false;
@@ -1848,6 +1928,149 @@ function handleRoleSelectionChange(role) {
       jenisAkunSelect.value = "Free";
     }
     handleJenisAkunChange(jenisAkunSelect.value);
+  }
+}
+
+let cachedFaskesListForDropdown = [];
+
+async function populateInstansiDropdown(role, preselectedVal = "") {
+  const select = document.getElementById("userInstansiSelect");
+  const hiddenInput = document.getElementById("userInstansiInput");
+  if (!select) return;
+
+  const tipe = (role === "rumah_sakit") ? "RUMAH_SAKIT" : "PUSKESMAS";
+  const labelTipe = (role === "rumah_sakit") ? "Rumah Sakit" : "Puskesmas";
+
+  select.innerHTML = `<option value="">— Memuat daftar ${labelTipe}... —</option>`;
+
+  try {
+    let url = `/api/faskes?tipe=${encodeURIComponent(tipe)}`;
+    if (role === "super_admin") {
+      url = "/api/faskes";
+    }
+    const res = await fetch(url);
+    const data = await res.json();
+    const list = (data && data.faskes) ? data.faskes : [];
+    cachedFaskesListForDropdown = list;
+
+    let html = `<option value="">— Pilih ${labelTipe} Terdaftar —</option>`;
+    let found = false;
+
+    list.forEach(f => {
+      const isSel = (preselectedVal && f.nama.trim().toLowerCase() === preselectedVal.trim().toLowerCase());
+      if (isSel) found = true;
+      html += `<option value="${f.nama}" ${isSel ? 'selected' : ''}>${f.nama} (${f.kab_kota || '-'}, ${f.kecamatan || '-'})</option>`;
+    });
+
+    if (preselectedVal && !found) {
+      html += `<option value="${preselectedVal}" selected>${preselectedVal} (Tersimpan)</option>`;
+    }
+
+    html += `<option value="__ADD_NEW__" style="color: #34d399; font-weight: bold;">+ Daftarkan ${labelTipe} Baru...</option>`;
+    select.innerHTML = html;
+
+    if (preselectedVal) {
+      select.value = preselectedVal;
+      if (hiddenInput) hiddenInput.value = preselectedVal;
+    } else {
+      if (hiddenInput) hiddenInput.value = select.value === "__ADD_NEW__" ? "" : select.value;
+    }
+  } catch (err) {
+    select.innerHTML = `
+      <option value="">— Gagal memuat daftar faskes —</option>
+      <option value="__ADD_NEW__">+ Daftarkan Manual...</option>
+    `;
+  }
+}
+
+function handleInstansiSelectChange(val) {
+  if (val === "__ADD_NEW__") {
+    promptQuickAddFaskes();
+  } else {
+    const hidden = document.getElementById("userInstansiInput");
+    if (hidden) hidden.value = val;
+  }
+}
+
+function promptQuickAddFaskes() {
+  const role = document.getElementById("userRoleSelect").value;
+  const tipe = (role === "rumah_sakit") ? "RUMAH_SAKIT" : "PUSKESMAS";
+  const tipeLabel = (role === "rumah_sakit") ? "RUMAH SAKIT" : "PUSKESMAS";
+
+  document.getElementById("quickFaskesTipe").value = tipe;
+  document.getElementById("quickFaskesTipeText").textContent = tipeLabel;
+  document.getElementById("quickFaskesModalTitle").textContent = `Daftarkan ${tipeLabel} Baru`;
+
+  document.getElementById("quickFaskesNamaInput").value = "";
+  document.getElementById("quickFaskesProvinsiInput").value = "Jawa Barat";
+  document.getElementById("quickFaskesKabKotaInput").value = "";
+  document.getElementById("quickFaskesKecamatanInput").value = "";
+
+  document.getElementById("quickFaskesModal").classList.add("show");
+}
+
+function closeQuickFaskesModal() {
+  document.getElementById("quickFaskesModal").classList.remove("show");
+  const curVal = document.getElementById("userInstansiInput").value;
+  const select = document.getElementById("userInstansiSelect");
+  if (select) {
+    select.value = curVal || "";
+  }
+}
+
+async function handleQuickFaskesSubmit(event) {
+  event.preventDefault();
+  const tipe = document.getElementById("quickFaskesTipe").value;
+  const nama = document.getElementById("quickFaskesNamaInput").value.trim();
+  const provinsi = document.getElementById("quickFaskesProvinsiInput").value.trim();
+  const kab_kota = document.getElementById("quickFaskesKabKotaInput").value.trim();
+  const kecamatan = document.getElementById("quickFaskesKecamatanInput").value.trim();
+
+  if (!nama || !provinsi || !kab_kota || !kecamatan) {
+    Swal.fire({ icon: "warning", title: "Data Belum Lengkap", text: "Mohon isi semua field faskes.", background: "#131d31", color: "#fff" });
+    return;
+  }
+
+  const btn = document.getElementById("btnSaveQuickFaskes");
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Mendaftarkan...`;
+
+  try {
+    const res = await fetch("/api/faskes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nama, tipe, provinsi, kab_kota, kecamatan })
+    });
+    const data = await res.json();
+
+    if (res.status === 409 || (data && data.status === "duplicate")) {
+      Swal.fire({
+        icon: "warning",
+        title: "Faskes Sudah Terdaftar",
+        text: data.message || "Faskes dengan nama, tipe, kab/kota, dan kecamatan tersebut sudah ada di database.",
+        background: "#131d31",
+        color: "#fff",
+        confirmButtonColor: "#0d9488"
+      });
+      return;
+    }
+
+    if (res.ok && data.status === "success") {
+      showToast(`Unit ${tipe} "${nama}" berhasil didaftarkan!`, "success");
+      closeQuickFaskesModal();
+
+      const currentRole = document.getElementById("userRoleSelect").value;
+      await populateInstansiDropdown(currentRole, nama);
+      document.getElementById("userInstansiInput").value = nama;
+      document.getElementById("userInstansiSelect").value = nama;
+    } else {
+      Swal.fire({ icon: "error", title: "Gagal Mendaftar", text: data.message || "Gagal menyimpan faskes", background: "#131d31", color: "#fff" });
+    }
+  } catch (err) {
+    Swal.fire({ icon: "error", title: "Error", text: err.message, background: "#131d31", color: "#fff" });
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i class="fa-solid fa-check"></i> <span>Simpan & Pilih Faskes</span>`;
   }
 }
 
@@ -2144,4 +2367,578 @@ function showToast(message, type = "info") {
     toast.classList.remove("show");
     setTimeout(() => toast.remove(), 250);
   }, 4000);
+}
+
+// ==========================================================================
+// 17. MASTER DATA FASKES (PUSKESMAS & RUMAH SAKIT)
+// ==========================================================================
+
+let cachedFaskes = [];
+let currentFaskesTab = "PUSKESMAS"; // 'PUSKESMAS' or 'RUMAH_SAKIT'
+let faskesSearchKeyword = "";
+
+function openFaskesModal() {
+  document.getElementById("faskesModal").classList.add("show");
+  switchFaskesTab("PUSKESMAS");
+  loadFaskesList();
+}
+
+function closeFaskesModal() {
+  document.getElementById("faskesModal").classList.remove("show");
+}
+
+function switchFaskesTab(tipe) {
+  currentFaskesTab = tipe;
+  const tabPusk = document.getElementById("tabFaskesPuskesmas");
+  const tabRS = document.getElementById("tabFaskesRS");
+  const btnAddText = document.getElementById("btnAddFaskesText");
+
+  if (tipe === "PUSKESMAS") {
+    tabPusk.classList.add("active");
+    tabRS.classList.remove("active");
+    if (btnAddText) btnAddText.textContent = "Tambah Puskesmas";
+  } else {
+    tabRS.classList.add("active");
+    tabPusk.classList.remove("active");
+    if (btnAddText) btnAddText.textContent = "Tambah Rumah Sakit";
+  }
+
+  applyFaskesFilters();
+}
+
+async function loadFaskesList() {
+  const tbody = document.getElementById("faskesTableBody");
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 25px; color: var(--text-secondary);"><i class="fa-solid fa-circle-notch fa-spin"></i> Memuat master data faskes...</td></tr>`;
+
+  try {
+    const res = await fetch("/api/faskes");
+    const data = await res.json();
+    if (res.ok && data.status === "success") {
+      cachedFaskes = data.faskes || [];
+
+      // Update counters
+      const countPusk = cachedFaskes.filter(f => f.tipe === "PUSKESMAS").length;
+      const countRS = cachedFaskes.filter(f => f.tipe === "RUMAH_SAKIT").length;
+      const badgePusk = document.getElementById("badgeFaskesPuskesmas");
+      const badgeRS = document.getElementById("badgeFaskesRS");
+      if (badgePusk) badgePusk.textContent = countPusk;
+      if (badgeRS) badgeRS.textContent = countRS;
+
+      applyFaskesFilters();
+    } else {
+      tbody.innerHTML = `<tr><td colspan="7" style="color:#fb7185; text-align:center; padding: 20px;">Gagal memuat: ${data.message}</td></tr>`;
+    }
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:#fb7185; text-align:center; padding: 20px;">Error: ${err.message}</td></tr>`;
+  }
+}
+
+function filterFaskesTable() {
+  faskesSearchKeyword = (document.getElementById("faskesSearchInput").value || "").trim().toLowerCase();
+  applyFaskesFilters();
+}
+
+function applyFaskesFilters() {
+  const tbody = document.getElementById("faskesTableBody");
+  if (!tbody) return;
+
+  const filtered = cachedFaskes.filter(f => {
+    if (f.tipe !== currentFaskesTab) return false;
+    if (faskesSearchKeyword) {
+      const q = faskesSearchKeyword;
+      return (
+        (f.nama && f.nama.toLowerCase().includes(q)) ||
+        (f.provinsi && f.provinsi.toLowerCase().includes(q)) ||
+        (f.kab_kota && f.kab_kota.toLowerCase().includes(q)) ||
+        (f.kecamatan && f.kecamatan.toLowerCase().includes(q))
+      );
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 30px; color: var(--text-muted);"><i class="fa-regular fa-folder-open"></i> Tidak ada unit ${currentFaskesTab === 'PUSKESMAS' ? 'Puskesmas' : 'Rumah Sakit'} terdaftar.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map((f, idx) => {
+    const tipeBadge = f.tipe === "PUSKESMAS"
+      ? `<span class="badge-role badge-role--puskesmas"><i class="fa-solid fa-house-medical"></i> Puskesmas</span>`
+      : `<span class="badge-role badge-role--rumahsakit"><i class="fa-solid fa-hospital"></i> RS</span>`;
+
+    return `
+      <tr>
+        <td style="text-align: center; color: var(--text-muted);">${idx + 1}</td>
+        <td style="font-weight: 600; color: #fff;">${f.nama}</td>
+        <td>${tipeBadge}</td>
+        <td>${f.provinsi || '-'}</td>
+        <td>${f.kab_kota || '-'}</td>
+        <td>${f.kecamatan || '-'}</td>
+        <td style="text-align: center;">
+          <button class="btn-row-action delete" onclick="deleteFaskes('${f.id}', '${f.nama}')" title="Hapus Faskes">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function openAddFaskesModal() {
+  const form = document.getElementById("faskesForm");
+  if (form) form.reset();
+  document.getElementById("faskesFormId").value = "";
+  document.getElementById("faskesTipeSelect").value = currentFaskesTab;
+  document.getElementById("faskesProvinsiInput").value = "Jawa Barat";
+  document.getElementById("faskesFormModal").classList.add("show");
+}
+
+function closeFaskesFormModal() {
+  document.getElementById("faskesFormModal").classList.remove("show");
+}
+
+async function handleFaskesFormSubmit(event) {
+  event.preventDefault();
+  const tipe = document.getElementById("faskesTipeSelect").value;
+  const nama = document.getElementById("faskesNamaInput").value.trim();
+  const provinsi = document.getElementById("faskesProvinsiInput").value.trim();
+  const kab_kota = document.getElementById("faskesKabKotaInput").value.trim();
+  const kecamatan = document.getElementById("faskesKecamatanInput").value.trim();
+
+  if (!nama || !provinsi || !kab_kota || !kecamatan) {
+    Swal.fire({ icon: "warning", title: "Data Kurang", text: "Semua kolom wajib diisi!", background: "#131d31", color: "#fff" });
+    return;
+  }
+
+  const btn = document.getElementById("btnSaveFaskes");
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Menyimpan...`;
+
+  try {
+    const res = await fetch("/api/faskes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nama, tipe, provinsi, kab_kota, kecamatan })
+    });
+    const data = await res.json();
+
+    if (res.status === 409 || (data && data.status === "duplicate")) {
+      Swal.fire({
+        icon: "warning",
+        title: "Faskes Sudah Terdaftar",
+        text: data.message || "Faskes dengan kombinasi nama, tipe, kab/kota, dan kecamatan tersebut sudah ada.",
+        background: "#131d31",
+        color: "#fff",
+        confirmButtonColor: "#0d9488"
+      });
+      return;
+    }
+
+    if (res.ok && data.status === "success") {
+      showToast(`Unit ${tipe} "${nama}" berhasil disimpan.`, "success");
+      closeFaskesFormModal();
+      loadFaskesList();
+    } else {
+      Swal.fire({ icon: "error", title: "Gagal Menyimpan", text: data.message || "Gagal menyimpan faskes", background: "#131d31", color: "#fff" });
+    }
+  } catch (err) {
+    Swal.fire({ icon: "error", title: "Error", text: err.message, background: "#131d31", color: "#fff" });
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i class="fa-solid fa-check"></i> <span>Simpan Faskes</span>`;
+  }
+}
+
+async function deleteFaskes(id, nama) {
+  Swal.fire({
+    title: `Hapus Faskes?`,
+    html: `Apakah Anda yakin ingin menghapus <strong>${nama}</strong> dari database?`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Ya, Hapus",
+    cancelButtonText: "Batal",
+    background: "#131d31",
+    color: "#fff",
+    confirmButtonColor: "#f43f5e"
+  }).then(async (result) => {
+    if (result.isConfirmed) {
+      try {
+        const res = await fetch(`/api/faskes?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+        const data = await res.json();
+        if (res.ok && data.status === "success") {
+          showToast(`Faskes "${nama}" berhasil dihapus.`, "success");
+          loadFaskesList();
+        } else {
+          Swal.fire({ icon: "error", title: "Gagal", text: data.message, background: "#131d31", color: "#fff" });
+        }
+      } catch (e) {
+        showToast("Error: " + e.message, "error");
+      }
+    }
+  });
+}
+
+// ==========================================================================
+// 18. MASTER DATA SEKOLAH PER PUSKESMAS (ISOLASI & ANTI-DUPLIKAT)
+// ==========================================================================
+
+let cachedSchools = [];
+let schoolSearchKeyword = "";
+let selectedSchoolInstansi = "";
+let parsedSchoolImportList = [];
+
+async function openSchoolsModal() {
+  const isSuperAdmin = currentUser && (currentUser.role === "super_admin" || currentUser.role === "admin" || (currentUser.lisensi || "").toUpperCase().includes("LIFETIME"));
+  const filterBox = document.getElementById("schoolPuskesmasFilterBox");
+  const filterSelect = document.getElementById("schoolPuskesmasFilter");
+  const displaySpan = document.getElementById("schoolModalInstansiDisplay");
+
+  if (isSuperAdmin) {
+    if (filterBox) filterBox.style.display = "block";
+    if (displaySpan) displaySpan.textContent = "Semua Puskesmas (Admin View)";
+
+    // Populate Puskesmas filter
+    try {
+      const res = await fetch("/api/faskes?tipe=PUSKESMAS");
+      const data = await res.json();
+      const puskList = data.faskes || [];
+      filterSelect.innerHTML = `<option value="">— Tampilkan Semua Puskesmas —</option>` +
+        puskList.map(p => `<option value="${p.nama}">${p.nama} (${p.kecamatan || '-'})</option>`).join("");
+    } catch (e) {}
+
+    selectedSchoolInstansi = filterSelect ? filterSelect.value : "";
+  } else {
+    if (filterBox) filterBox.style.display = "none";
+    selectedSchoolInstansi = (currentUser && currentUser.instansi) ? currentUser.instansi : "";
+    if (displaySpan) displaySpan.textContent = selectedSchoolInstansi || "Puskesmas Induk";
+  }
+
+  document.getElementById("schoolsModal").classList.add("show");
+  loadSchoolsList();
+}
+
+function closeSchoolsModal() {
+  document.getElementById("schoolsModal").classList.remove("show");
+}
+
+async function loadSchoolsList() {
+  const tbody = document.getElementById("schoolsTableBody");
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 25px; color: var(--text-secondary);"><i class="fa-solid fa-circle-notch fa-spin"></i> Memuat master data sekolah...</td></tr>`;
+
+  const isSuperAdmin = currentUser && (currentUser.role === "super_admin" || currentUser.role === "admin" || (currentUser.lisensi || "").toUpperCase().includes("LIFETIME"));
+  let instansiParam = "";
+
+  if (isSuperAdmin) {
+    const filterSelect = document.getElementById("schoolPuskesmasFilter");
+    instansiParam = filterSelect ? filterSelect.value : "";
+    selectedSchoolInstansi = instansiParam;
+  } else {
+    instansiParam = (currentUser && currentUser.instansi) ? currentUser.instansi : "";
+    selectedSchoolInstansi = instansiParam;
+  }
+
+  try {
+    let url = "/api/schools";
+    if (instansiParam) {
+      url += `?instansi=${encodeURIComponent(instansiParam)}`;
+    }
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (res.ok && data.status === "success") {
+      cachedSchools = data.schools || [];
+      applySchoolsFilters();
+    } else {
+      tbody.innerHTML = `<tr><td colspan="5" style="color:#fb7185; text-align:center; padding: 20px;">Gagal memuat: ${data.message}</td></tr>`;
+    }
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" style="color:#fb7185; text-align:center; padding: 20px;">Error: ${err.message}</td></tr>`;
+  }
+}
+
+function filterSchoolsTable() {
+  schoolSearchKeyword = (document.getElementById("schoolSearchInput").value || "").trim().toLowerCase();
+  applySchoolsFilters();
+}
+
+function applySchoolsFilters() {
+  const tbody = document.getElementById("schoolsTableBody");
+  if (!tbody) return;
+
+  const filtered = cachedSchools.filter(s => {
+    if (schoolSearchKeyword) {
+      const q = schoolSearchKeyword;
+      return (
+        (s.nama_sekolah && s.nama_sekolah.toLowerCase().includes(q)) ||
+        (s.alamat_sekolah && s.alamat_sekolah.toLowerCase().includes(q)) ||
+        (s.instansi && s.instansi.toLowerCase().includes(q))
+      );
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color: var(--text-muted);"><i class="fa-regular fa-folder-open"></i> Belum ada data sekolah yang tersimpan untuk Puskesmas ini.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map((s, idx) => `
+    <tr>
+      <td style="text-align: center; color: var(--text-muted);">${idx + 1}</td>
+      <td style="font-weight: 600; color: #fff;">
+        <i class="fa-solid fa-graduation-cap" style="color: var(--teal-400); margin-right: 6px;"></i>
+        ${s.nama_sekolah}
+      </td>
+      <td style="color: var(--text-secondary);">${s.alamat_sekolah || '-'}</td>
+      <td style="color: #38bdf8; font-size: 0.78rem;">
+        <i class="fa-solid fa-hospital" style="margin-right: 4px;"></i>${s.instansi}
+      </td>
+      <td style="text-align: center;">
+        <button class="btn-row-action delete" onclick="deleteSchool('${s.id}', '${s.nama_sekolah.replace(/'/g, "\\'")}')" title="Hapus Sekolah">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function openAddSchoolModal() {
+  const form = document.getElementById("schoolForm");
+  if (form) form.reset();
+  document.getElementById("schoolFormId").value = "";
+
+  const instansiInput = document.getElementById("schoolInstansiInput");
+  const activeInstansi = selectedSchoolInstansi || (currentUser && currentUser.instansi ? currentUser.instansi : "");
+
+  if (!activeInstansi) {
+    Swal.fire({
+      icon: "info",
+      title: "Pilih Puskesmas Terlebih Dahulu",
+      text: "Silakan pilih Puskesmas pada dropdown filter di atas sebelum menambahkan sekolah.",
+      background: "#131d31",
+      color: "#fff"
+    });
+    return;
+  }
+
+  instansiInput.value = activeInstansi;
+  document.getElementById("schoolFormModal").classList.add("show");
+}
+
+function closeSchoolFormModal() {
+  document.getElementById("schoolFormModal").classList.remove("show");
+}
+
+async function handleSchoolFormSubmit(event) {
+  event.preventDefault();
+  const instansi = document.getElementById("schoolInstansiInput").value.trim();
+  const nama_sekolah = document.getElementById("schoolNamaInput").value.trim();
+  const alamat_sekolah = document.getElementById("schoolAlamatInput").value.trim();
+
+  if (!instansi || !nama_sekolah || !alamat_sekolah) {
+    Swal.fire({ icon: "warning", title: "Data Kurang", text: "Nama sekolah dan alamat wajib diisi!", background: "#131d31", color: "#fff" });
+    return;
+  }
+
+  const btn = document.getElementById("btnSaveSchool");
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Menyimpan...`;
+
+  try {
+    const res = await fetch("/api/schools", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ instansi, nama_sekolah, alamat_sekolah })
+    });
+    const data = await res.json();
+
+    if (res.status === 409 || (data && data.status === "duplicate")) {
+      Swal.fire({
+        icon: "warning",
+        title: "Sekolah Duplikat",
+        text: data.message || "Sekolah dengan nama dan alamat tersebut sudah ada di Puskesmas ini!",
+        background: "#131d31",
+        color: "#fff",
+        confirmButtonColor: "#0d9488"
+      });
+      return;
+    }
+
+    if (res.ok && data.status === "success") {
+      showToast(`Sekolah "${nama_sekolah}" berhasil ditambahkan!`, "success");
+      closeSchoolFormModal();
+      loadSchoolsList();
+    } else {
+      Swal.fire({ icon: "error", title: "Gagal", text: data.message || "Gagal menyimpan data sekolah.", background: "#131d31", color: "#fff" });
+    }
+  } catch (err) {
+    Swal.fire({ icon: "error", title: "Error", text: err.message, background: "#131d31", color: "#fff" });
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i class="fa-solid fa-check"></i> <span>Simpan Sekolah</span>`;
+  }
+}
+
+async function deleteSchool(id, nama) {
+  Swal.fire({
+    title: `Hapus Sekolah?`,
+    html: `Apakah Anda yakin ingin menghapus data sekolah <strong>${nama}</strong>?`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Ya, Hapus",
+    cancelButtonText: "Batal",
+    background: "#131d31",
+    color: "#fff",
+    confirmButtonColor: "#f43f5e"
+  }).then(async (result) => {
+    if (result.isConfirmed) {
+      try {
+        const res = await fetch(`/api/schools?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+        const data = await res.json();
+        if (res.ok && data.status === "success") {
+          showToast(`Sekolah "${nama}" berhasil dihapus.`, "success");
+          loadSchoolsList();
+        } else {
+          Swal.fire({ icon: "error", title: "Gagal", text: data.message, background: "#131d31", color: "#fff" });
+        }
+      } catch (e) {
+        showToast("Error: " + e.message, "error");
+      }
+    }
+  });
+}
+
+function openSchoolImportModal() {
+  const activeInstansi = selectedSchoolInstansi || (currentUser && currentUser.instansi ? currentUser.instansi : "");
+  if (!activeInstansi) {
+    Swal.fire({
+      icon: "info",
+      title: "Pilih Puskesmas Terlebih Dahulu",
+      text: "Silakan pilih Puskesmas pada dropdown filter sebelum melakukan import data sekolah.",
+      background: "#131d31",
+      color: "#fff"
+    });
+    return;
+  }
+
+  parsedSchoolImportList = [];
+  const fileInput = document.getElementById("schoolFileInput");
+  if (fileInput) fileInput.value = "";
+  document.getElementById("schoolFileName").textContent = "Format .csv, .xlsx, .xls";
+  document.getElementById("schoolImportPreview").style.display = "none";
+  document.getElementById("btnProcessSchoolImport").disabled = true;
+
+  document.getElementById("schoolImportModal").classList.add("show");
+}
+
+function closeSchoolImportModal() {
+  document.getElementById("schoolImportModal").classList.remove("show");
+}
+
+function handleSchoolFileSelected(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  document.getElementById("schoolFileName").textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: "array" });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+      if (!rawRows || rawRows.length === 0) {
+        Swal.fire({ icon: "warning", title: "File Kosong", text: "Tidak ada baris data dalam file ini.", background: "#131d31", color: "#fff" });
+        return;
+      }
+
+      parsedSchoolImportList = [];
+
+      rawRows.forEach(row => {
+        let nama = "";
+        let alamat = "";
+
+        for (const [key, val] of Object.entries(row)) {
+          const k = key.toString().trim().toLowerCase();
+          const v = (val || "").toString().trim();
+          if (k.includes("nama") && (k.includes("sekolah") || k.includes("instansi") || k.includes("sd") || k.includes("smp"))) {
+            nama = v;
+          } else if (!nama && k.includes("nama")) {
+            nama = v;
+          } else if (k.includes("alamat")) {
+            alamat = v;
+          }
+        }
+
+        if (!nama && Object.values(row)[0]) {
+          nama = Object.values(row)[0].toString().trim();
+        }
+        if (!alamat && Object.values(row)[1]) {
+          alamat = Object.values(row)[1].toString().trim();
+        }
+
+        if (nama) {
+          parsedSchoolImportList.push({
+            nama_sekolah: nama,
+            alamat_sekolah: alamat || "Alamat belum diatur"
+          });
+        }
+      });
+
+      if (parsedSchoolImportList.length > 0) {
+        document.getElementById("schoolImportCount").textContent = parsedSchoolImportList.length;
+        document.getElementById("schoolImportPreview").style.display = "block";
+        document.getElementById("btnProcessSchoolImport").disabled = false;
+      } else {
+        Swal.fire({ icon: "warning", title: "Format Tidak Dikenali", text: "Pastikan ada kolom 'Nama Sekolah' dan 'Alamat Sekolah'.", background: "#131d31", color: "#fff" });
+      }
+    } catch (err) {
+      Swal.fire({ icon: "error", title: "Gagal Membaca File", text: err.message, background: "#131d31", color: "#fff" });
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function processSchoolImport() {
+  const activeInstansi = selectedSchoolInstansi || (currentUser && currentUser.instansi ? currentUser.instansi : "");
+  if (!activeInstansi || parsedSchoolImportList.length === 0) return;
+
+  const btn = document.getElementById("btnProcessSchoolImport");
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Mengimpor...`;
+
+  try {
+    const res = await fetch("/api/schools", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        instansi: activeInstansi,
+        schools: parsedSchoolImportList
+      })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.status === "success") {
+      Swal.fire({
+        icon: "success",
+        title: "Import Selesai",
+        html: `Berhasil mengimpor <strong>${data.inserted || 0}</strong> sekolah baru.<br><small style="color: var(--text-muted);">Dilewati (Duplikat): ${data.skipped_duplicates || 0} sekolah.</small>`,
+        background: "#131d31",
+        color: "#fff",
+        confirmButtonColor: "#0d9488"
+      });
+      closeSchoolImportModal();
+      loadSchoolsList();
+    } else {
+      Swal.fire({ icon: "error", title: "Gagal Mengimpor", text: data.message || "Gagal", background: "#131d31", color: "#fff" });
+    }
+  } catch (err) {
+    Swal.fire({ icon: "error", title: "Error", text: err.message, background: "#131d31", color: "#fff" });
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i class="fa-solid fa-upload"></i> <span>Proses Impor</span>`;
+  }
 }

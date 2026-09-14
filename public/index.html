@@ -121,11 +121,19 @@
             <i class="fa-solid fa-user-plus"></i>
             <span>Input Pasien Manual</span>
           </button>
+          <button class="sidebar-nav-btn" id="navSchools" onclick="openSchoolsModal()">
+            <i class="fa-solid fa-school"></i>
+            <span>Kelola Data Sekolah</span>
+          </button>
         </div>
 
         <!-- Admin Only Menu -->
         <div class="sidebar-nav-section" id="adminMenuSection">
           <div class="sidebar-label">Pusat Administrator</div>
+          <button class="sidebar-nav-btn" id="navFaskes" onclick="openFaskesModal()">
+            <i class="fa-solid fa-hospital"></i>
+            <span>Master Data Faskes</span>
+          </button>
           <button class="sidebar-nav-btn" id="navUsers" onclick="openUserModal()">
             <i class="fa-solid fa-user-gear"></i>
             <span>Kelola Akun Petugas</span>
@@ -545,8 +553,12 @@
         <button class="btn-drawer-close" onclick="closeImportModal()">&times;</button>
       </div>
       <div class="modal-card-body">
-        <p style="font-size: 0.82rem; color: var(--text-secondary);">
-          Tarik dan jatuhkan file Excel (<code>.xlsx</code>) atau CSV dari sekolah/desa. Sistem secara otomatis mendeteksi kolom NIK, Nama, dan Tanggal Lahir serta memvalidasi panjang 16 digit NIK.
+        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 6px; font-size: 0.78rem; color: #38bdf8; margin-bottom: 8px;">
+          <i class="fa-solid fa-hospital"></i>
+          <span>Bank Data Puskesmas: <strong id="importModalInstansi">Memuat...</strong></span>
+        </div>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 12px;">
+          Tarik dan jatuhkan file Excel (<code>.xlsx</code>) atau CSV dari sekolah/desa. Data otomatis terisolasi dan tersimpan untuk Puskesmas Anda.
         </p>
 
         <!-- Target Category Selector -->
@@ -798,7 +810,14 @@
             <label>2. Instansi / Unit Faskes*</label>
             <div class="input-box">
               <i class="fa-solid fa-hospital"></i>
-              <input type="text" id="userInstansiInput" placeholder="Contoh: Puskesmas Cibinong / RSUD Ciawi" required>
+              <select id="userInstansiSelect" onchange="handleInstansiSelectChange(this.value)" required style="width: 100%; background: transparent; border: none; color: #fff; font-size: 0.85rem; outline: none; cursor: pointer;">
+                <option value="">— Pilih Faskes Terdaftar —</option>
+              </select>
+              <input type="hidden" id="userInstansiInput" required>
+            </div>
+            <div style="font-size: 0.72rem; color: #38bdf8; margin-top: 4px; display: flex; align-items: center; justify-content: space-between;">
+              <span>Pilihan disesuaikan dengan Role</span>
+              <a href="javascript:void(0)" onclick="promptQuickAddFaskes()" style="color: #34d399; text-decoration: underline; font-weight: 600;">+ Daftarkan Faskes Baru</a>
             </div>
           </div>
 
@@ -919,6 +938,370 @@
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: KELOLA MASTER DATA SEKOLAH (PER PUSKESMAS)
+       ========================================================================== -->
+  <div class="modal-overlay" id="schoolsModal">
+    <div class="modal-card" style="max-width: 860px;">
+      <div class="modal-card-header">
+        <div class="modal-card-title">
+          <i class="fa-solid fa-school" style="color: var(--teal-400);"></i>
+          <span>Kelola Master Data Sekolah</span>
+        </div>
+        <button class="btn-drawer-close" onclick="closeSchoolsModal()">&times;</button>
+      </div>
+      <div class="modal-card-body">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 15px;">
+          <div>
+            <div style="font-size: 0.85rem; font-weight: 600; color: #fff;">
+              Faskes / Puskesmas: <span id="schoolModalInstansiDisplay" style="color: var(--teal-400);">Semua</span>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">
+              Data sekolah ini otomatis dibaca oleh Bot ENCO saat memilih sekolah pada menu skrining/pendaftaran.
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-action-outline" onclick="openSchoolImportModal()" title="Upload CSV atau Excel daftar sekolah">
+              <i class="fa-solid fa-file-csv"></i>
+              <span>Import CSV/Excel</span>
+            </button>
+            <button class="btn-action-primary" onclick="openAddSchoolModal()">
+              <i class="fa-solid fa-plus"></i>
+              <span>Tambah Sekolah</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter bar if super_admin or multiple puskesmas -->
+        <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: center;">
+          <div class="input-box" style="flex: 1;">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="schoolSearchInput" placeholder="Cari nama sekolah atau alamat..." oninput="filterSchoolsTable()">
+          </div>
+          <div id="schoolPuskesmasFilterBox" style="width: 260px; display: none;">
+            <select id="schoolPuskesmasFilter" onchange="loadSchoolsList()" style="width: 100%; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: #fff; padding: 8px; font-size: 0.8rem;">
+              <option value="">— Filter Semua Puskesmas —</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="max-height: 380px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
+          <table class="enterprise-table" style="font-size: 0.8rem;">
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">No</th>
+                <th>Nama Sekolah</th>
+                <th>Alamat Sekolah</th>
+                <th id="thSchoolInstansi">Puskesmas Induk</th>
+                <th style="width: 80px; text-align: center;">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="schoolsTableBody">
+              <tr>
+                <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">Memuat data sekolah...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: FORM TAMBAH / EDIT SEKOLAH
+       ========================================================================== -->
+  <div class="modal-overlay" id="schoolFormModal">
+    <div class="modal-card" style="max-width: 500px;">
+      <div class="modal-card-header">
+        <div class="modal-card-title">
+          <i class="fa-solid fa-school-flag" style="color: var(--teal-400);"></i>
+          <span id="schoolFormTitle">Tambah Sekolah Baru</span>
+        </div>
+        <button class="btn-drawer-close" onclick="closeSchoolFormModal()">&times;</button>
+      </div>
+      <div class="modal-card-body">
+        <form id="schoolForm" onsubmit="handleSchoolFormSubmit(event)" style="display: flex; flex-direction: column; gap: 14px;">
+          <input type="hidden" id="schoolFormId" value="">
+          
+          <div class="input-field" id="schoolInstansiField">
+            <label>Puskesmas Induk*</label>
+            <div class="input-box">
+              <i class="fa-solid fa-hospital"></i>
+              <input type="text" id="schoolInstansiInput" placeholder="Nama Puskesmas" required readonly>
+            </div>
+          </div>
+
+          <div class="input-field">
+            <label>Nama Sekolah*</label>
+            <div class="input-box">
+              <i class="fa-solid fa-graduation-cap"></i>
+              <input type="text" id="schoolNamaInput" placeholder="Contoh: SDN 01 Cibinong" required>
+            </div>
+          </div>
+
+          <div class="input-field">
+            <label>Alamat Sekolah*</label>
+            <div class="input-box">
+              <i class="fa-solid fa-location-dot"></i>
+              <input type="text" id="schoolAlamatInput" placeholder="Contoh: Jl. Mayor Oking No. 12" required>
+            </div>
+          </div>
+
+          <div style="font-size: 0.73rem; color: var(--text-muted); background: rgba(56, 189, 248, 0.08); padding: 8px 10px; border-radius: 6px; border-left: 3px solid #38bdf8;">
+            <i class="fa-solid fa-circle-info"></i> <strong>Ketentuan Anti-Duplikat:</strong> Nama sekolah dan alamat tidak boleh sama persis di Puskesmas yang sama. Jika nama sama tetapi alamat berbeda, tetap diizinkan.
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+            <button type="button" class="btn-action-outline" onclick="closeSchoolFormModal()">Batal</button>
+            <button type="submit" class="btn-action-primary" id="btnSaveSchool">
+              <i class="fa-solid fa-check"></i>
+              <span>Simpan Sekolah</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: IMPORT CSV/EXCEL SEKOLAH
+       ========================================================================== -->
+  <div class="modal-overlay" id="schoolImportModal">
+    <div class="modal-card" style="max-width: 500px;">
+      <div class="modal-card-header">
+        <div class="modal-card-title">
+          <i class="fa-solid fa-file-import" style="color: #34d399;"></i>
+          <span>Import Data Sekolah (CSV/Excel)</span>
+        </div>
+        <button class="btn-drawer-close" onclick="closeSchoolImportModal()">&times;</button>
+      </div>
+      <div class="modal-card-body" style="display: flex; flex-direction: column; gap: 12px;">
+        <p style="font-size: 0.8rem; color: var(--text-secondary);">
+          Upload file CSV atau Excel dengan kolom: <code>Nama Sekolah</code> dan <code>Alamat Sekolah</code>.
+        </p>
+        <div class="drop-zone" onclick="document.getElementById('schoolFileInput').click()" style="border: 2px dashed var(--border-subtle); padding: 24px; text-align: center; border-radius: var(--radius-sm); cursor: pointer; background: rgba(255,255,255,0.02);">
+          <i class="fa-solid fa-cloud-arrow-up" style="font-size: 2rem; color: var(--teal-400); margin-bottom: 8px;"></i>
+          <div style="font-size: 0.85rem; font-weight: 600;">Klik untuk pilih file CSV / Excel</div>
+          <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;" id="schoolFileName">Format .csv, .xlsx, .xls</div>
+          <input type="file" id="schoolFileInput" accept=".csv, .xlsx, .xls" style="display: none;" onchange="handleSchoolFileSelected(event)">
+        </div>
+
+        <div id="schoolImportPreview" style="display: none; font-size: 0.75rem; color: #34d399; background: rgba(52, 211, 153, 0.1); padding: 8px; border-radius: 4px;">
+          Terdeteksi <span id="schoolImportCount">0</span> sekolah siap diimpor.
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+          <button type="button" class="btn-action-outline" onclick="closeSchoolImportModal()">Batal</button>
+          <button type="button" class="btn-action-primary" id="btnProcessSchoolImport" onclick="processSchoolImport()" disabled>
+            <i class="fa-solid fa-upload"></i>
+            <span>Proses Impor</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: MASTER DATA FASKES (PUSKESMAS & RUMAH SAKIT)
+       ========================================================================== -->
+  <div class="modal-overlay" id="faskesModal">
+    <div class="modal-card" style="max-width: 860px;">
+      <div class="modal-card-header">
+        <div class="modal-card-title">
+          <i class="fa-solid fa-hospital" style="color: #38bdf8;"></i>
+          <span>Master Data Faskes (Puskesmas & Rumah Sakit)</span>
+        </div>
+        <button class="btn-drawer-close" onclick="closeFaskesModal()">&times;</button>
+      </div>
+      <div class="modal-card-body">
+        <!-- Faskes Type Tabs -->
+        <div style="display: flex; gap: 8px; margin-bottom: 14px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px;">
+          <button class="sidebar-nav-btn active" id="tabFaskesPuskesmas" onclick="switchFaskesTab('PUSKESMAS')" style="width: auto; padding: 6px 16px;">
+            <i class="fa-solid fa-house-medical"></i>
+            <span>Data Puskesmas</span>
+            <span class="nav-counter" id="badgeFaskesPuskesmas">0</span>
+          </button>
+          <button class="sidebar-nav-btn" id="tabFaskesRS" onclick="switchFaskesTab('RUMAH_SAKIT')" style="width: auto; padding: 6px 16px;">
+            <i class="fa-solid fa-hospital"></i>
+            <span>Data Rumah Sakit</span>
+            <span class="nav-counter" id="badgeFaskesRS">0</span>
+          </button>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px;">
+          <div class="input-box" style="flex: 1;">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="faskesSearchInput" placeholder="Cari nama faskes, kab/kota, atau kecamatan..." oninput="filterFaskesTable()">
+          </div>
+          <button class="btn-action-primary" onclick="openAddFaskesModal()">
+            <i class="fa-solid fa-plus"></i>
+            <span id="btnAddFaskesText">Tambah Puskesmas</span>
+          </button>
+        </div>
+
+        <div style="max-height: 380px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);">
+          <table class="enterprise-table" style="font-size: 0.8rem;">
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">No</th>
+                <th>Nama Faskes</th>
+                <th>Tipe</th>
+                <th>Provinsi</th>
+                <th>Kabupaten / Kota</th>
+                <th>Kecamatan</th>
+                <th style="width: 80px; text-align: center;">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="faskesTableBody">
+              <tr>
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">Memuat data faskes...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: FORM TAMBAH FASKES (DARI MASTER DATA FASKES)
+       ========================================================================== -->
+  <div class="modal-overlay" id="faskesFormModal">
+    <div class="modal-card" style="max-width: 520px;">
+      <div class="modal-card-header">
+        <div class="modal-card-title">
+          <i class="fa-solid fa-hospital-user" style="color: #38bdf8;"></i>
+          <span id="faskesFormTitle">Tambah Faskes Baru</span>
+        </div>
+        <button class="btn-drawer-close" onclick="closeFaskesFormModal()">&times;</button>
+      </div>
+      <div class="modal-card-body">
+        <form id="faskesForm" onsubmit="handleFaskesFormSubmit(event)" style="display: flex; flex-direction: column; gap: 14px;">
+          <input type="hidden" id="faskesFormId" value="">
+
+          <div class="input-field">
+            <label>Tipe Faskes*</label>
+            <div class="input-box">
+              <i class="fa-solid fa-layer-group"></i>
+              <select id="faskesTipeSelect" required style="width: 100%; background: transparent; border: none; color: #fff; font-size: 0.85rem; outline: none;">
+                <option value="PUSKESMAS">Puskesmas</option>
+                <option value="RUMAH_SAKIT">Rumah Sakit</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="input-field">
+            <label>Nama Faskes / Puskesmas / RS*</label>
+            <div class="input-box">
+              <i class="fa-solid fa-hospital"></i>
+              <input type="text" id="faskesNamaInput" placeholder="Contoh: Puskesmas Cibinong / RSUD Cibinong" required>
+            </div>
+          </div>
+
+          <div class="input-field">
+            <label>Provinsi*</label>
+            <div class="input-box">
+              <i class="fa-solid fa-map"></i>
+              <input type="text" id="faskesProvinsiInput" placeholder="Contoh: Jawa Barat" required>
+            </div>
+          </div>
+
+          <div class="input-field">
+            <label>Kabupaten / Kota*</label>
+            <div class="input-box">
+              <i class="fa-solid fa-city"></i>
+              <input type="text" id="faskesKabKotaInput" placeholder="Contoh: Kab. Bogor" required>
+            </div>
+          </div>
+
+          <div class="input-field">
+            <label>Kecamatan*</label>
+            <div class="input-box">
+              <i class="fa-solid fa-location-dot"></i>
+              <input type="text" id="faskesKecamatanInput" placeholder="Contoh: Cibinong" required>
+            </div>
+          </div>
+
+          <div style="font-size: 0.73rem; color: var(--text-muted); background: rgba(56, 189, 248, 0.08); padding: 8px 10px; border-radius: 6px; border-left: 3px solid #38bdf8;">
+            <i class="fa-solid fa-circle-info"></i> <strong>Ketentuan Anti-Duplikat:</strong> Kombinasi Nama, Tipe, Kab/Kota, dan Kecamatan tidak boleh duplikat di database.
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+            <button type="button" class="btn-action-outline" onclick="closeFaskesFormModal()">Batal</button>
+            <button type="submit" class="btn-action-primary" id="btnSaveFaskes">
+              <i class="fa-solid fa-check"></i>
+              <span>Simpan Faskes</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: QUICK ADD FASKES (DARI REGISTRASI / EDIT USER)
+       ========================================================================== -->
+  <div class="modal-overlay" id="quickFaskesModal" style="z-index: 10000;">
+    <div class="modal-card" style="max-width: 500px;">
+      <div class="modal-card-header">
+        <div class="modal-card-title">
+          <i class="fa-solid fa-plus-circle" style="color: #34d399;"></i>
+          <span id="quickFaskesModalTitle">Daftarkan Faskes Baru</span>
+        </div>
+        <button class="btn-drawer-close" onclick="closeQuickFaskesModal()">&times;</button>
+      </div>
+      <div class="modal-card-body">
+        <form id="quickFaskesForm" onsubmit="handleQuickFaskesSubmit(event)" style="display: flex; flex-direction: column; gap: 14px;">
+          <input type="hidden" id="quickFaskesTipe" value="PUSKESMAS">
+
+          <div style="font-size: 0.8rem; color: #38bdf8; background: rgba(56, 189, 248, 0.08); padding: 8px 12px; border-radius: 6px;">
+            Mendaftarkan unit faskes tipe: <strong id="quickFaskesTipeText">PUSKESMAS</strong>
+          </div>
+
+          <div class="input-field">
+            <label>Nama Puskesmas / RS*</label>
+            <div class="input-box">
+              <i class="fa-solid fa-hospital"></i>
+              <input type="text" id="quickFaskesNamaInput" placeholder="Contoh: Puskesmas Sukaraja" required>
+            </div>
+          </div>
+
+          <div class="input-field">
+            <label>Provinsi*</label>
+            <div class="input-box">
+              <i class="fa-solid fa-map"></i>
+              <input type="text" id="quickFaskesProvinsiInput" placeholder="Contoh: Jawa Barat" required>
+            </div>
+          </div>
+
+          <div class="input-field">
+            <label>Kabupaten / Kota*</label>
+            <div class="input-box">
+              <i class="fa-solid fa-city"></i>
+              <input type="text" id="quickFaskesKabKotaInput" placeholder="Contoh: Kab. Bogor" required>
+            </div>
+          </div>
+
+          <div class="input-field">
+            <label>Kecamatan*</label>
+            <div class="input-box">
+              <i class="fa-solid fa-location-dot"></i>
+              <input type="text" id="quickFaskesKecamatanInput" placeholder="Contoh: Sukaraja" required>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+            <button type="button" class="btn-action-outline" onclick="closeQuickFaskesModal()">Batal</button>
+            <button type="submit" class="btn-action-primary" id="btnSaveQuickFaskes">
+              <i class="fa-solid fa-check"></i>
+              <span>Simpan & Pilih Faskes</span>
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   </div>

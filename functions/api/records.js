@@ -25,6 +25,8 @@ export async function onRequestGet({ request, env }) {
   const search = (url.searchParams.get("search") || "").trim().toLowerCase();
   const status = url.searchParams.get("status");
   const sekolah = url.searchParams.get("sekolah");
+  const kelas = url.searchParams.get("kelas");
+  const instansi = url.searchParams.get("instansi");
   const risk = url.searchParams.get("risk"); // hipertensi, gula_tinggi, anemia, karies, obesitas
   const page = parseInt(url.searchParams.get("page") || "1", 10);
   const limitParam = url.searchParams.get("limit") || "25";
@@ -36,8 +38,10 @@ export async function onRequestGet({ request, env }) {
     // Mode Mock jika D1 belum terhubung di preview
     let sampleData = generateSampleData(category);
 
+    if (instansi) sampleData = sampleData.filter(r => r.instansi === instansi);
     if (status) sampleData = sampleData.filter(r => r.status === status);
     if (sekolah && category === "SEKOLAH") sampleData = sampleData.filter(r => r.sekolah === sekolah);
+    if (kelas && category === "SEKOLAH") sampleData = sampleData.filter(r => r.kelas === kelas);
     if (search) {
       sampleData = sampleData.filter(r => 
         (r.nik && r.nik.toLowerCase().includes(search)) ||
@@ -63,7 +67,7 @@ export async function onRequestGet({ request, env }) {
           total: totalCount,
           totalPages: Math.ceil(totalCount / limit) || 1
         },
-        stats: calculateMockStats(generateSampleData(category)),
+        stats: calculateMockStats(sampleData),
         records: paginated
       }),
       { status: 200, headers: corsHeaders }
@@ -74,6 +78,11 @@ export async function onRequestGet({ request, env }) {
     let whereClauses = ["category = ?1"];
     let params = [category];
 
+    if (instansi && instansi.trim() !== "") {
+      params.push(instansi.trim());
+      whereClauses.push(`instansi = ?${params.length}`);
+    }
+
     if (status) {
       params.push(status);
       whereClauses.push(`status = ?${params.length}`);
@@ -82,6 +91,11 @@ export async function onRequestGet({ request, env }) {
     if (sekolah && category === "SEKOLAH") {
       params.push(sekolah);
       whereClauses.push(`sekolah = ?${params.length}`);
+    }
+
+    if (kelas && category === "SEKOLAH") {
+      params.push(kelas);
+      whereClauses.push(`kelas = ?${params.length}`);
     }
 
     if (search) {
@@ -113,13 +127,20 @@ export async function onRequestGet({ request, env }) {
     const countQuery = `SELECT COUNT(*) as c FROM records WHERE ${whereSql}`;
     const totalMatching = await env.DB.prepare(countQuery).bind(...params).first("c") || 0;
 
-    // 2. Ambil statistik umum untuk dashboard (tanpa filter pencarian/status)
-    const baseStats = await getAggregatedStats(env.DB, category);
+    // 2. Ambil statistik umum untuk dashboard (difilter per instansi jika ada)
+    const baseStats = await getAggregatedStats(env.DB, category, instansi);
 
-    // 3. Ambil daftar sekolah unik untuk dropdown filter
+    // 3. Ambil daftar sekolah unik untuk dropdown filter (difilter per instansi jika ada)
     let sekolahList = [];
     if (category === "SEKOLAH") {
-      const schResults = await env.DB.prepare("SELECT DISTINCT sekolah FROM records WHERE category = 'SEKOLAH' AND sekolah IS NOT NULL AND sekolah != '' ORDER BY sekolah ASC").all();
+      let schSql = "SELECT DISTINCT sekolah FROM records WHERE category = 'SEKOLAH' AND sekolah IS NOT NULL AND sekolah != ''";
+      let schParams = [];
+      if (instansi && instansi.trim() !== "") {
+        schSql += " AND instansi = ?1";
+        schParams.push(instansi.trim());
+      }
+      schSql += " ORDER BY sekolah ASC";
+      const schResults = await env.DB.prepare(schSql).bind(...schParams).all();
       sekolahList = (schResults.results || []).map(r => r.sekolah);
     }
 
@@ -152,24 +173,33 @@ export async function onRequestGet({ request, env }) {
   }
 }
 
-async function getAggregatedStats(db, category) {
+async function getAggregatedStats(db, category, instansi = null) {
   try {
-    const total = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = ?1").bind(category).first("c") || 0;
-    const selesai = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = ?1 AND status = 'SELESAI_PEMERIKSAAN'").bind(category).first("c") || 0;
-    const terdaftar = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = ?1 AND status = 'TERDAFTAR'").bind(category).first("c") || 0;
+    let whereBase = "category = ?1";
+    let params = [category];
+    if (instansi && instansi.trim() !== "") {
+      whereBase += " AND instansi = ?2";
+      params.push(instansi.trim());
+    }
+
+    const total = await db.prepare(`SELECT COUNT(*) as c FROM records WHERE ${whereBase}`).bind(...params).first("c") || 0;
+    const selesai = await db.prepare(`SELECT COUNT(*) as c FROM records WHERE ${whereBase} AND status = 'SELESAI_PEMERIKSAAN'`).bind(...params).first("c") || 0;
+    const terdaftar = await db.prepare(`SELECT COUNT(*) as c FROM records WHERE ${whereBase} AND status = 'TERDAFTAR'`).bind(...params).first("c") || 0;
 
     // Statistik klinis
-    const hipertensi = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = ?1 AND (td_sistolik >= 140 OR td_diastolik >= 90)").bind(category).first("c") || 0;
-    const gulaTinggi = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = ?1 AND gula_darah >= 200").bind(category).first("c") || 0;
+    const hipertensi = await db.prepare(`SELECT COUNT(*) as c FROM records WHERE ${whereBase} AND (td_sistolik >= 140 OR td_diastolik >= 90)`).bind(...params).first("c") || 0;
+    const gulaTinggi = await db.prepare(`SELECT COUNT(*) as c FROM records WHERE ${whereBase} AND gula_darah >= 200`).bind(...params).first("c") || 0;
     
     let anemia = 0;
     let karies = 0;
     if (category === "SEKOLAH") {
-      anemia = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = 'SEKOLAH' AND hb IS NOT NULL AND hb > 0 AND hb < 12").first("c") || 0;
-      karies = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = 'SEKOLAH' AND karies IS NOT NULL AND karies != '' AND karies != 'Tidak' AND karies != '0'").first("c") || 0;
+      let whereAnemia = `${whereBase} AND hb IS NOT NULL AND hb > 0 AND hb < 12`;
+      let whereKaries = `${whereBase} AND karies IS NOT NULL AND karies != '' AND karies != 'Tidak' AND karies != '0'`;
+      anemia = await db.prepare(`SELECT COUNT(*) as c FROM records WHERE ${whereAnemia}`).bind(...params).first("c") || 0;
+      karies = await db.prepare(`SELECT COUNT(*) as c FROM records WHERE ${whereKaries}`).bind(...params).first("c") || 0;
     }
 
-    const obesitas = await db.prepare("SELECT COUNT(*) as c FROM records WHERE category = ?1 AND bb IS NOT NULL AND tb IS NOT NULL AND (bb / ((tb/100.0) * (tb/100.0))) >= 25.0").bind(category).first("c") || 0;
+    const obesitas = await db.prepare(`SELECT COUNT(*) as c FROM records WHERE ${whereBase} AND bb IS NOT NULL AND tb IS NOT NULL AND (bb / ((tb/100.0) * (tb/100.0))) >= 25.0`).bind(...params).first("c") || 0;
 
     return {
       total,
@@ -223,9 +253,17 @@ export async function onRequestPost({ request, env }) {
       INSERT INTO records (
         nik, category, nama, tanggal_lahir, umur, jenis_kelamin, 
         nomor_tiket, instansi, sekolah, kelas, no_hp, alamat, 
-        status, petugas_pendaftaran, updated_at
+        bb, tb, lp, td_sistolik, td_diastolik, gula_darah, hb,
+        karies, kacamata, menstruasi, kebugaran, merokok, kadar_co,
+        katarak, telinga, mata, status, petugas_pendaftaran, updated_at
       )
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 'TERDAFTAR', ?13, CURRENT_TIMESTAMP)
+      VALUES (
+        ?1, ?2, ?3, ?4, ?5, ?6,
+        ?7, ?8, ?9, ?10, ?11, ?12,
+        ?13, ?14, ?15, ?16, ?17, ?18, ?19,
+        ?20, ?21, ?22, ?23, ?24, ?25,
+        ?26, ?27, ?28, ?29, ?30, CURRENT_TIMESTAMP
+      )
       ON CONFLICT(nik) DO UPDATE SET
         nama = excluded.nama,
         category = excluded.category,
@@ -233,13 +271,32 @@ export async function onRequestPost({ request, env }) {
         umur = COALESCE(excluded.umur, records.umur),
         jenis_kelamin = COALESCE(excluded.jenis_kelamin, records.jenis_kelamin),
         nomor_tiket = COALESCE(excluded.nomor_tiket, records.nomor_tiket),
+        instansi = COALESCE(excluded.instansi, records.instansi),
         sekolah = COALESCE(excluded.sekolah, records.sekolah),
         kelas = COALESCE(excluded.kelas, records.kelas),
         no_hp = COALESCE(excluded.no_hp, records.no_hp),
         alamat = COALESCE(excluded.alamat, records.alamat),
+        bb = COALESCE(excluded.bb, records.bb),
+        tb = COALESCE(excluded.tb, records.tb),
+        lp = COALESCE(excluded.lp, records.lp),
+        td_sistolik = COALESCE(excluded.td_sistolik, records.td_sistolik),
+        td_diastolik = COALESCE(excluded.td_diastolik, records.td_diastolik),
+        gula_darah = COALESCE(excluded.gula_darah, records.gula_darah),
+        hb = COALESCE(excluded.hb, records.hb),
+        karies = COALESCE(excluded.karies, records.karies),
+        kacamata = COALESCE(excluded.kacamata, records.kacamata),
+        menstruasi = COALESCE(excluded.menstruasi, records.menstruasi),
+        kebugaran = COALESCE(excluded.kebugaran, records.kebugaran),
+        merokok = COALESCE(excluded.merokok, records.merokok),
+        kadar_co = COALESCE(excluded.kadar_co, records.kadar_co),
+        katarak = COALESCE(excluded.katarak, records.katarak),
+        telinga = COALESCE(excluded.telinga, records.telinga),
+        mata = COALESCE(excluded.mata, records.mata),
         petugas_pendaftaran = excluded.petugas_pendaftaran,
         updated_at = CURRENT_TIMESTAMP;
     `);
+
+    const fallbackInstansi = (body.instansi || (items[0] && items[0].instansi) || "Puskesmas").toString().trim();
 
     // Jalankan eksekusi batch
     const statements = [];
@@ -256,17 +313,39 @@ export async function onRequestPost({ request, env }) {
       const umur = data.umur ? parseInt(data.umur, 10) : null;
       const jenisKelamin = data.jenis_kelamin || data.jenisKelamin || null;
       const nomorTiket = data.nomor_tiket || data.nomorTiket || null;
-      const instansi = data.instansi || "Puskesmas";
+      const instansi = (data.instansi || fallbackInstansi || "Puskesmas").toString().trim();
       const sekolah = data.sekolah || null;
       const kelas = data.kelas || null;
       const noHp = data.no_hp || data.noHp || null;
       const alamat = data.alamat || null;
+      
+      const bb = data.bb !== undefined && data.bb !== null && data.bb !== "" ? parseFloat(data.bb) : null;
+      const tb = data.tb !== undefined && data.tb !== null && data.tb !== "" ? parseFloat(data.tb) : null;
+      const lp = data.lp !== undefined && data.lp !== null && data.lp !== "" ? parseFloat(data.lp) : null;
+      const sistol = data.td_sistolik !== undefined && data.td_sistolik !== null && data.td_sistolik !== "" ? parseInt(data.td_sistolik, 10) : null;
+      const diastol = data.td_diastolik !== undefined && data.td_diastolik !== null && data.td_diastolik !== "" ? parseInt(data.td_diastolik, 10) : null;
+      const gula = data.gula_darah !== undefined && data.gula_darah !== null && data.gula_darah !== "" ? parseInt(data.gula_darah, 10) : null;
+      const hb = data.hb !== undefined && data.hb !== null && data.hb !== "" ? parseFloat(data.hb) : null;
+      const karies = data.karies || null;
+      const kacamata = data.kacamata || null;
+      const menstruasi = data.menstruasi || null;
+      const kebugaran = data.kebugaran || null;
+      const merokok = data.merokok || null;
+      const kadarCo = data.kadar_co !== undefined && data.kadar_co !== null && data.kadar_co !== "" ? parseInt(data.kadar_co, 10) : null;
+      const katarak = data.katarak || null;
+      const telinga = data.telinga || null;
+      const mata = data.mata || null;
+
+      const status = data.status || "TERDAFTAR";
       const petugasPendaftaran = data.petugas || data.petugas_pendaftaran || "Petugas Import";
 
       statements.push(
         upsertStmt.bind(
           nik, category, nama, tanggalLahir, umur, jenisKelamin,
-          nomorTiket, instansi, sekolah, kelas, noHp, alamat, petugasPendaftaran
+          nomorTiket, instansi, sekolah, kelas, noHp, alamat,
+          bb, tb, lp, sistol, diastol, gula, hb,
+          karies, kacamata, menstruasi, kebugaran, merokok, kadarCo,
+          katarak, telinga, mata, status, petugasPendaftaran
         )
       );
       successCount++;
@@ -279,7 +358,7 @@ export async function onRequestPost({ request, env }) {
     return new Response(
       JSON.stringify({
         status: "success",
-        message: `Berhasil memproses ${successCount} data ke Cloudflare D1`,
+        message: `Berhasil memproses ${successCount} data ke Cloudflare D1 (${fallbackInstansi})`,
         successCount,
         errorCount
       }),
@@ -430,7 +509,14 @@ export async function onRequestDelete({ request, env }) {
     }
 
     const placeholders = nikList.map((_, i) => `?${i + 1}`).join(",");
-    await env.DB.prepare(`DELETE FROM records WHERE nik IN (${placeholders})`).bind(...nikList).run();
+    let delSql = `DELETE FROM records WHERE nik IN (${placeholders})`;
+    let delParams = [...nikList];
+    const instansi = url.searchParams.get("instansi");
+    if (instansi && instansi.trim() !== "") {
+      delSql += ` AND instansi = ?${delParams.length + 1}`;
+      delParams.push(instansi.trim());
+    }
+    await env.DB.prepare(delSql).bind(...delParams).run();
 
     return new Response(
       JSON.stringify({ status: "success", message: `${nikList.length} rekam data pasien berhasil dihapus.` }),
